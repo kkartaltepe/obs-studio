@@ -61,3 +61,4 @@ static inline enum audio_format convert_ffmpeg_sample_format(
 	/* shouldn't get here */
 	return AUDIO_FORMAT_16BIT;
 }
+
