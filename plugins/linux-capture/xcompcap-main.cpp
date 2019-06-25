@@ -349,11 +349,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 
 	gs_color_format cf = GS_RGBA;
 
-	if (p->exclude_alpha) {
-		cf = GS_BGRX;
-	}
-
-	bool has_alpha = true;
+	bool has_alpha = false;
 
 	const int attrs[] = {GLX_BIND_TO_TEXTURE_RGBA_EXT,
 			     GL_TRUE,
@@ -390,13 +386,11 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 			XFree(visual);
 			continue;
 		}
+
+		if (visual->depth == 32)
+			has_alpha = true;
+
 		XFree(visual);
-
-		int value;
-		glXGetFBConfigAttrib(xdisp, config, GLX_ALPHA_SIZE, &value);
-		if (value != 8)
-			has_alpha = false;
-
 		break;
 	}
 
@@ -429,7 +423,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 	if (!found)
 		config = configs[0];
 
-	if (cf == GS_BGRX || !has_alpha) {
+	if (p->exclude_alpha || !has_alpha) {
 		p->draw_opaque = true;
 	}
 
@@ -505,7 +499,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 					GLX_TEXTURE_FORMAT_EXT,
 					GLX_TEXTURE_FORMAT_RGB_EXT, None};
 
-	const int *attribs = cf == GS_RGBA ? attribs_alpha : attribs_no_alpha;
+	const int *attribs = p->draw_opaque ? attribs_alpha : attribs_no_alpha;
 
 	p->glxpixmap = glXCreatePixmap(xdisp, config, p->pixmap, attribs);
 
