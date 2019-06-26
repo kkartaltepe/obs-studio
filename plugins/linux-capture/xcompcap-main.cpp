@@ -347,8 +347,6 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 		xcursor_offset(p->cursor, x, y);
 	}
 
-	gs_color_format cf = GS_RGBA;
-
 	bool has_alpha = false;
 
 	const int attrs[] = {GLX_BIND_TO_TEXTURE_RGBA_EXT,
@@ -466,7 +464,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 
 	const uint8_t *texDataArr[] = {texData, 0};
 
-	p->tex = gs_texture_create(width(), height(), cf, 1, texDataArr, 0);
+	p->tex = gs_texture_create(width(), height(), p->draw_opaque ? GS_RGBX : GS_RGBA, 1, texDataArr, 0);
 
 	delete[] texData;
 
@@ -499,7 +497,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 					GLX_TEXTURE_FORMAT_EXT,
 					GLX_TEXTURE_FORMAT_RGB_EXT, None};
 
-	const int *attribs = p->draw_opaque ? attribs_alpha : attribs_no_alpha;
+	const int *attribs = p->draw_opaque ? attribs_no_alpha : attribs_alpha;
 
 	p->glxpixmap = glXCreatePixmap(xdisp, config, p->pixmap, attribs);
 
@@ -515,7 +513,7 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 
 	XFree(configs);
 
-	p->gltex = gs_texture_create(p->width, p->height, cf, 1, 0,
+	p->gltex = gs_texture_create(p->width, p->height, p->draw_opaque ? GS_RGBX : GS_RGBA, 1, 0,
 				     GS_GL_DUMMYTEX);
 
 	GLuint gltex = *(GLuint *)gs_texture_get_obj(p->gltex);
