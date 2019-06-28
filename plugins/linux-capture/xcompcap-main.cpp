@@ -247,6 +247,39 @@ static Window getWindowFromString(std::string wstr)
 	return matchedNameWin;
 }
 
+static char* gl_error_to_str(GLenum errorcode) {
+static void* err_to_str[][2]  = {
+	{ (void*)GL_INVALID_ENUM, (void*)"GL_INVALID_ENUM", },
+	{ (void*)GL_INVALID_VALUE, (void*)"GL_INVALID_VALUE", },
+	{ (void*)GL_INVALID_OPERATION, (void*)"GL_INVALID_OPERATION", },
+	{ (void*)GL_INVALID_FRAMEBUFFER_OPERATION, (void*)"GL_INVALID_FRAMEBUFFER_OPERATION", },
+	{ (void*)GL_OUT_OF_MEMORY, (void*)"GL_OUT_OF_MEMORY", },
+	{ (void*)GL_STACK_UNDERFLOW, (void*)"GL_STACK_UNDERFLOW", },
+	{ (void*)GL_STACK_OVERFLOW, (void*)"GL_STACK_OVERFLOW", },
+	{ NULL, (void*)"Unknown", },
+};
+	int i = 0;
+	while((long)err_to_str[i][0] != (long)errorcode || err_to_str[i][0] == NULL) {
+		i += 2;
+	}
+	return (char*)err_to_str[i][1];
+}
+
+static inline bool gl_success(const char *funcname)
+{
+        GLenum errorcode = glGetError();
+        if (errorcode != GL_NO_ERROR) {
+                do {
+                blog(LOG_ERROR, "%s failed, glGetError returned %s(0x%X)", funcname,
+                     gl_error_to_str(errorcode), errorcode);
+                errorcode = glGetError();
+                } while (errorcode != GL_NO_ERROR);
+                return false;
+        }
+
+        return true;
+}
+
 static void xcc_cleanup(XCompcapMain_private *p)
 {
 	PLock lock(&p->lock);
@@ -255,6 +288,7 @@ static void xcc_cleanup(XCompcapMain_private *p)
 	if (p->gltex) {
 		GLuint gltex = *(GLuint *)gs_texture_get_obj(p->gltex);
 		glBindTexture(GL_TEXTURE_2D, gltex);
+		gl_success("glBindTexture");
 		glXReleaseTexImageEXT(xdisp, p->glxpixmap, GLX_FRONT_LEFT_EXT);
 		gs_texture_destroy(p->gltex);
 		p->gltex = 0;
@@ -277,6 +311,44 @@ static void xcc_cleanup(XCompcapMain_private *p)
 		p->win = 0;
 	}
 }
+
+static gs_color_format gl_introspect_tex() {
+	GLint iformat=0;
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_INTERNAL_FORMAT, &iformat);
+	// glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_FORMAT, &format);
+	blog(LOG_DEBUG, "Texture internal_format is 0x%X", iformat);
+	switch (iformat) {
+	case GL_RGB:
+		return GS_RGBX;
+	case GL_RGBA:
+		return GS_RGBA;
+	default:
+		return GS_RGBA;
+	}
+}
+
+// from libobs-opengl/gl-subsystem.h because we need to handle GLX modifying textures outside libobs.
+struct fb_info;
+
+struct gs_texture {
+	gs_device_t *device;
+	enum gs_texture_type type;
+	enum gs_color_format format;
+	GLenum gl_format;
+	GLenum gl_target;
+	GLenum gl_internal_format;
+	GLenum gl_type;
+	GLuint texture;
+	uint32_t levels;
+	bool is_dynamic;
+	bool is_render_target;
+	bool is_dummy;
+	bool gen_mipmaps;
+
+	gs_samplerstate_t *cur_sampler;
+	struct fbo_info *fbo;
+};
+// End shitty hack.
 
 void XCompcapMain::updateSettings(obs_data_t *settings)
 {
@@ -360,49 +432,12 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 			     GLX_DOUBLEBUFFER,
 			     GL_FALSE,
 			     None};
-
 	int nelem = 0;
-	GLXFBConfig *configs = glXGetFBConfigs(
-		xdisp, XCompcap::getRootWindowScreen(attr.root), &nelem);
-
-	if (nelem <= 0) {
-		blog(LOG_ERROR, "no fb configs available");
-		p->win = 0;
-		p->height = 0;
-		p->width = 0;
-		return;
-	}
-
 	GLXFBConfig config;
-	for (int i = 0; i < nelem; i++) {
-		config = configs[i];
-		XVisualInfo *visual = glXGetVisualFromFBConfig(xdisp, config);
-		if (!visual)
-			continue;
-
-		if (attr.visual->visualid != visual->visualid) {
-			XFree(visual);
-			continue;
-		}
-
-		if (visual->depth == 32)
-			has_alpha = true;
-
-		XFree(visual);
-		break;
-	}
-
-	XFree(configs);
-	configs = glXChooseFBConfig(
+GLXFBConfig	*configs = glXChooseFBConfig(
 		xdisp, XCompcap::getRootWindowScreen(attr.root), attrs, &nelem);
 
-	if (nelem <= 0) {
-		blog(LOG_ERROR, "no matching fb config found");
-		p->win = 0;
-		p->height = 0;
-		p->width = 0;
-		return;
-	}
+
 	bool found = false;
 	for (int i = 0; i < nelem; i++) {
 		config = configs[i];
@@ -418,10 +453,15 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 		found = true;
 		break;
 	}
-	if (!found)
-		config = configs[0];
+	if (!found) {
+		blog(LOG_ERROR, "no matching fb config found");
+		p->win = 0;
+		p->height = 0;
+		p->width = 0;
+		return;
+	}
 
-	if (p->exclude_alpha || !has_alpha) {
+	if (p->exclude_alpha || attr.depth != 32) {
 		p->draw_opaque = true;
 	}
 
@@ -455,31 +495,11 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 		p->cur_cut_right = 0;
 	}
 
-	if (p->tex)
-		gs_texture_destroy(p->tex);
 
-	uint8_t *texData = new uint8_t[width() * height() * 4];
-
-	memset(texData, 0, width() * height() * 4);
-
-	const uint8_t *texDataArr[] = {texData, 0};
-
-	p->tex = gs_texture_create(width(), height(), p->draw_opaque ? GS_RGBX : GS_RGBA, 1, texDataArr, 0);
-
-	delete[] texData;
-
-	if (p->swapRedBlue) {
-		GLuint tex = *(GLuint *)gs_texture_get_obj(p->tex);
-		glBindTexture(GL_TEXTURE_2D, tex);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
-		glBindTexture(GL_TEXTURE_2D, 0);
-	}
 
 	xlock.resetError();
 
 	p->pixmap = XCompositeNameWindowPixmap(xdisp, p->win);
-
 	if (xlock.gotError()) {
 		blog(LOG_ERROR, "XCompositeNameWindowPixmap failed: %s",
 		     xlock.getErrorText().c_str());
@@ -497,8 +517,8 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 					GLX_TEXTURE_FORMAT_EXT,
 					GLX_TEXTURE_FORMAT_RGB_EXT, None};
 
-	const int *attribs = p->draw_opaque ? attribs_no_alpha : attribs_alpha;
-
+	// We need to match the windows size for this.
+	const int *attribs = attr.depth == 24 ? attribs_no_alpha : attribs_alpha;
 	p->glxpixmap = glXCreatePixmap(xdisp, config, p->pixmap, attribs);
 
 	if (xlock.gotError()) {
@@ -513,14 +533,34 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 
 	XFree(configs);
 
-	p->gltex = gs_texture_create(p->width, p->height, p->draw_opaque ? GS_RGBX : GS_RGBA, 1, 0,
-				     GS_GL_DUMMYTEX);
 
+	// TODO
+	// Create our own opengl texture
+	p->gltex = gs_texture_create(p->width, p->height, GS_RGBA, 1, 0, GS_GL_DUMMYTEX);
 	GLuint gltex = *(GLuint *)gs_texture_get_obj(p->gltex);
 	glBindTexture(GL_TEXTURE_2D, gltex);
+	gl_success("glBindTexture");
 	glXBindTexImageEXT(xdisp, p->glxpixmap, GLX_FRONT_LEFT_EXT, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	gl_success("glTexParameteri");
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	gl_success("glTexParameteri");
+	// Query its format after glxBindTexImageEXT
+	gs_color_format format = gl_introspect_tex();
+	// release our texture.
+	glBindTexture(GL_TEXTURE_2D, 0);
+	// overwrite texture id based on introspecting the modified texture
+	// p->gltex->format = format;
+	// Create gs_texture_create of appropriate format
+	if (p->tex)
+		gs_texture_destroy(p->tex);
+	p->tex = gs_texture_create(width(), height(), format, 1, 0, GS_GL_DUMMYTEX);
+	if (p->swapRedBlue) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+		gl_success("glTexParameteri");
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_BLUE);
+		gl_success("glTexParameteri");
+	}
 
 	if (!p->windowName.empty()) {
 		blog(LOG_INFO,
@@ -533,10 +573,6 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 		     XCompcap::getWindowName(p->win).c_str(),
 		     XCompcap::getWindowClass(p->win).c_str(),
 		     has_alpha ? "yes" : "no", found ? "yes" : "no");
-		blog(LOG_DEBUG,
-		     "\n"
-		     "\tid:    %s",
-		     std::to_string((long long)p->win).c_str());
 	}
 }
 
