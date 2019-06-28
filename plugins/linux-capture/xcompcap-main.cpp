@@ -283,24 +283,38 @@ static inline bool gl_success(const char *funcname)
 static void xcc_cleanup(XCompcapMain_private *p)
 {
 	PLock lock(&p->lock);
-	XDisplayLock xlock;
+	XErrorLock xlock;
 
 	if (p->gltex) {
 		GLuint gltex = *(GLuint *)gs_texture_get_obj(p->gltex);
 		glBindTexture(GL_TEXTURE_2D, gltex);
 		gl_success("glBindTexture");
-		glXReleaseTexImageEXT(xdisp, p->glxpixmap, GLX_FRONT_LEFT_EXT);
+		if (p->glxpixmap) {
+			glXReleaseTexImageEXT(xdisp, p->glxpixmap, GLX_FRONT_LEFT_EXT);
+			if (xlock.gotError()) {
+				blog(LOG_ERROR, "cleanup glXReleaseTexImageEXT failed: %s",
+				     xlock.getErrorText().c_str());
+				xlock.resetError();
+			}
+			glXDestroyPixmap(xdisp, p->glxpixmap);
+			if (xlock.gotError()) {
+				blog(LOG_ERROR, "cleanup glXDestroyPixmap failed: %s",
+				     xlock.getErrorText().c_str());
+				xlock.resetError();
+			}
+			p->glxpixmap = 0;
+		}
 		gs_texture_destroy(p->gltex);
 		p->gltex = 0;
 	}
 
-	if (p->glxpixmap) {
-		glXDestroyPixmap(xdisp, p->glxpixmap);
-		p->glxpixmap = 0;
-	}
-
 	if (p->pixmap) {
 		XFreePixmap(xdisp, p->pixmap);
+		if (xlock.gotError()) {
+			blog(LOG_ERROR, "cleanup glXDestroyPixmap failed: %s",
+			     xlock.getErrorText().c_str());
+			xlock.resetError();
+		}
 		p->pixmap = 0;
 	}
 
@@ -309,6 +323,11 @@ static void xcc_cleanup(XCompcapMain_private *p)
 					   CompositeRedirectAutomatic);
 		XSelectInput(xdisp, p->win, 0);
 		p->win = 0;
+	}
+
+	if (p->tex) {
+		gs_texture_destroy(p->tex);
+		p->tex = 0;
 	}
 }
 
@@ -322,6 +341,10 @@ static gs_color_format gl_introspect_tex() {
 		return GS_RGBX;
 	case GL_RGBA:
 		return GS_RGBA;
+	case GL_BGR:
+		return GS_BGRX;
+	case GL_BGRA:
+		return GS_BGRA;
 	default:
 		return GS_RGBA;
 	}
@@ -353,7 +376,6 @@ struct gs_texture {
 void XCompcapMain::updateSettings(obs_data_t *settings)
 {
 	PLock lock(&p->lock);
-	XErrorLock xlock;
 	ObsGsContextHolder obsctx;
 
 	blog(LOG_DEBUG, "Settings updating");
@@ -384,12 +406,11 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 		p->win = prevWin;
 	}
 
-	xlock.resetError();
 
+	XErrorLock xlock;
 	if (p->win)
 		XCompositeRedirectWindow(xdisp, p->win,
 					 CompositeRedirectAutomatic);
-
 	if (xlock.gotError()) {
 		blog(LOG_ERROR, "XCompositeRedirectWindow failed: %s",
 		     xlock.getErrorText().c_str());
@@ -419,16 +440,12 @@ void XCompcapMain::updateSettings(obs_data_t *settings)
 		xcursor_offset(p->cursor, x, y);
 	}
 
-	bool has_alpha = false;
-
 	const int attrs[] = {GLX_BIND_TO_TEXTURE_RGBA_EXT,
 			     GL_TRUE,
 			     GLX_DRAWABLE_TYPE,
 			     GLX_PIXMAP_BIT,
 			     GLX_BIND_TO_TEXTURE_TARGETS_EXT,
 			     GLX_TEXTURE_2D_BIT_EXT,
-			     GLX_ALPHA_SIZE,
-			     8,
 			     GLX_DOUBLEBUFFER,
 			     GL_FALSE,
 			     None};
@@ -458,6 +475,7 @@ GLXFBConfig	*configs = glXChooseFBConfig(
 		p->win = 0;
 		p->height = 0;
 		p->width = 0;
+		XFree(configs);
 		return;
 	}
 
@@ -518,9 +536,8 @@ GLXFBConfig	*configs = glXChooseFBConfig(
 					GLX_TEXTURE_FORMAT_RGB_EXT, None};
 
 	// We need to match the windows size for this.
-	const int *attribs = attr.depth == 24 ? attribs_no_alpha : attribs_alpha;
-	p->glxpixmap = glXCreatePixmap(xdisp, config, p->pixmap, attribs);
-
+	// const int *attribs = attr.depth == 24 ? attribs_no_alpha : attribs_alpha;
+	p->glxpixmap = glXCreatePixmap(xdisp, config, p->pixmap, attribs_alpha);
 	if (xlock.gotError()) {
 		blog(LOG_ERROR, "glXCreatePixmap failed: %s",
 		     xlock.getErrorText().c_str());
@@ -541,6 +558,15 @@ GLXFBConfig	*configs = glXChooseFBConfig(
 	glBindTexture(GL_TEXTURE_2D, gltex);
 	gl_success("glBindTexture");
 	glXBindTexImageEXT(xdisp, p->glxpixmap, GLX_FRONT_LEFT_EXT, NULL);
+	if (xlock.gotError()) {
+		blog(LOG_ERROR, "glXBindTexImageEXT failed: %s",
+		     xlock.getErrorText().c_str());
+		XFreePixmap(xdisp, p->pixmap);
+		XFree(configs);
+		p->pixmap = 0;
+		p->glxpixmap = 0;
+		return;
+	}
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	gl_success("glTexParameteri");
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -550,7 +576,7 @@ GLXFBConfig	*configs = glXChooseFBConfig(
 	// release our texture.
 	glBindTexture(GL_TEXTURE_2D, 0);
 	// overwrite texture id based on introspecting the modified texture
-	// p->gltex->format = format;
+	p->gltex->format = format;
 	// Create gs_texture_create of appropriate format
 	if (p->tex)
 		gs_texture_destroy(p->tex);
@@ -567,12 +593,12 @@ GLXFBConfig	*configs = glXChooseFBConfig(
 		     "[window-capture: '%s'] update settings:\n"
 		     "\ttitle: %s\n"
 		     "\tclass: %s\n"
-		     "\tHas alpha: %s\n"
-		     "\tFound proper GLXFBConfig: %s\n",
+		     "\tBit depth: %i\n"
+		     "\tFound proper GLXFBConfig (in %i): %s\n",
 		     obs_source_get_name(p->source),
 		     XCompcap::getWindowName(p->win).c_str(),
 		     XCompcap::getWindowClass(p->win).c_str(),
-		     has_alpha ? "yes" : "no", found ? "yes" : "no");
+		     attr.depth, nelem, found ? "yes" : "no");
 	}
 }
 

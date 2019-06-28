@@ -308,6 +308,7 @@ static int xerrorlock_handler(Display *disp, XErrorEvent *err)
 		*curErrorTarget = true;
 
 	XGetErrorText(disp, err->error_code, curErrorText, 200);
+	blog(LOG_ERROR, "xerror_handler: %s", curErrorText);
 
 	return 0;
 }
