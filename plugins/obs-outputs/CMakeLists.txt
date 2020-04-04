@@ -2,6 +2,8 @@ project(obs-outputs)
 
 set(WITH_RTMPS AUTO CACHE STRING "Enable RTMPS support with mbedTLS")
 set_property(CACHE WITH_RTMPS PROPERTY STRINGS AUTO ON OFF)
+set(WITH_FTL AUTO CACHE STRING "Enable FTL support (requires SDK submodule)")
+set_property(CACHE WITH_RTMPS PROPERTY STRINGS AUTO ON OFF)
 
 option(STATIC_MBEDTLS "Statically link mbedTLS into binary" OFF)
 
@@ -24,7 +26,7 @@ else()
 	add_definitions(-DNO_CRYPTO)
 endif()
 
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ftl-sdk/CMakeLists.txt")
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ftl-sdk/CMakeLists.txt" AND WITH_FTL)
 	find_package(Libcurl REQUIRED)
 	message(STATUS "Found ftl-sdk: ftl outputs enabled")
 
@@ -75,6 +77,8 @@ if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ftl-sdk/CMakeLists.txt")
 	include_directories(ftl-sdk/libftl)
 
 	set(COMPILE_FTL TRUE)
+elseif (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ftl-sdk/CMakeLists.txt" AND (WITH_FTL STREQUAL "ON"))
+	message(FATAL_ERROR "WITH_FTL enabled but ftl-sdk submodule not available")
 else()
 	set(COMPILE_FTL FALSE)
 endif()
