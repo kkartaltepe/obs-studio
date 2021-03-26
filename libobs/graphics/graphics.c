@@ -1367,6 +1367,7 @@ gs_texture_t *gs_texture_create(uint32_t width, uint32_t height,
 
 gs_texture_t *gs_texture_create_from_dmabuf(unsigned int width,
 					    unsigned int height,
+					    uint32_t drm_format,
 					    enum gs_color_format color_format,
 					    uint32_t n_planes, const int *fds,
 					    const uint32_t *strides,
@@ -1376,7 +1377,7 @@ gs_texture_t *gs_texture_create_from_dmabuf(unsigned int width,
 	graphics_t *graphics = thread_graphics;
 
 	return graphics->exports.device_texture_create_from_dmabuf(
-		graphics->device, width, height, color_format, n_planes, fds,
+		graphics->device, width, height, drm_format, color_format, n_planes, fds,
 		strides, offsets, modifiers);
 }
 
