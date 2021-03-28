@@ -40,6 +40,15 @@
 	(sizeof(struct spa_meta_cursor) + sizeof(struct spa_meta_bitmap) + \
 	 width * height * 4)
 
+
+#define fourcc_code(a, b, c, d) ((__u32)(a) | ((__u32)(b) << 8) | \
+				 ((__u32)(c) << 16) | ((__u32)(d) << 24))
+
+#define DRM_FORMAT_XRGB8888	fourcc_code('X', 'R', '2', '4') /* [31:0] x:R:G:B 8:8:8:8 little endian */
+#define DRM_FORMAT_XBGR8888	fourcc_code('X', 'B', '2', '4') /* [31:0] x:B:G:R 8:8:8:8 little endian */
+#define DRM_FORMAT_ARGB8888	fourcc_code('A', 'R', '2', '4') /* [31:0] A:R:G:B 8:8:8:8 little endian */
+#define DRM_FORMAT_ABGR8888	fourcc_code('A', 'B', '2', '4') /* [31:0] A:B:G:R 8:8:8:8 little endian */
+
 struct _obs_pipewire_data {
 	GDBusConnection *connection;
 	GDBusProxy *proxy;
@@ -257,7 +266,35 @@ static inline bool has_effective_crop(obs_pipewire_data *obs_pw)
 }
 
 static bool
-spa_pixel_format_to_obs_pixel_format(uint32_t spa_format,
+spa_pixel_format_to_drm_format(uint32_t spa_format,
+				     uint32_t *out_format)
+{
+	switch (spa_format) {
+	case SPA_VIDEO_FORMAT_RGBA:
+		*out_format = DRM_FORMAT_ABGR8888;
+		break;
+
+	case SPA_VIDEO_FORMAT_RGBx:
+		*out_format = DRM_FORMAT_XBGR8888;
+		break;
+
+	case SPA_VIDEO_FORMAT_BGRA:
+		*out_format = DRM_FORMAT_ARGB8888;
+		break;
+
+	case SPA_VIDEO_FORMAT_BGRx:
+		*out_format = DRM_FORMAT_XRGB8888;
+		break;
+
+	default:
+		return false;
+	}
+
+	return true;
+}
+
+static bool
+spa_pixel_format_to_obs_format(uint32_t spa_format,
 				     enum gs_color_format *out_format,
 				     bool *swap_red_blue)
 {
@@ -305,11 +342,11 @@ static void on_process_cb(void *user_data)
 {
 	obs_pipewire_data *obs_pw = user_data;
 	struct spa_meta_cursor *cursor;
-	enum gs_color_format obs_format;
+	uint32_t drm_format;
 	struct spa_meta_region *region;
 	struct spa_buffer *buffer;
 	struct pw_buffer *b;
-	bool swap_red_blue;
+	bool swap_red_blue = false;
 	bool has_buffer;
 
 	/* Find the most recent buffer */
@@ -334,13 +371,6 @@ static void on_process_cb(void *user_data)
 
 	obs_enter_graphics();
 
-	if (!spa_pixel_format_to_obs_pixel_format(
-		    obs_pw->format.info.raw.format, &obs_format,
-		    &swap_red_blue)) {
-		blog(LOG_ERROR, "[pipewire] unsupported buffer format: %d",
-		     obs_pw->format.info.raw.format);
-		goto read_metadata;
-	}
 
 	if (!has_buffer)
 		goto read_metadata;
@@ -358,6 +388,13 @@ static void on_process_cb(void *user_data)
 		     obs_pw->format.info.raw.size.width,
 		     obs_pw->format.info.raw.size.height);
 
+		if (!spa_pixel_format_to_drm_format(
+			    obs_pw->format.info.raw.format, &drm_format)) {
+			blog(LOG_ERROR, "[pipewire] unsupported DMA buffer format: %d",
+			     obs_pw->format.info.raw.format);
+			goto read_metadata;
+		}
+
 		fds[0] = buffer->datas[0].fd;
 		offsets[0] = buffer->datas[0].chunk->offset;
 		strides[0] = buffer->datas[0].chunk->stride;
@@ -366,10 +403,18 @@ static void on_process_cb(void *user_data)
 		g_clear_pointer(&obs_pw->texture, gs_texture_destroy);
 		obs_pw->texture = gs_texture_create_from_dmabuf(
 			obs_pw->format.info.raw.size.width,
-			obs_pw->format.info.raw.size.height, obs_format, 1, fds,
+			obs_pw->format.info.raw.size.height, drm_format, GS_BGRX, 1, fds,
 			strides, offsets, modifiers);
 	} else {
 		blog(LOG_DEBUG, "[pipewire] Buffer has memory texture");
+		enum gs_color_format obs_format;
+
+		if (!spa_pixel_format_to_obs_format(
+			    obs_pw->format.info.raw.format, &obs_format, &swap_red_blue)) {
+			blog(LOG_ERROR, "[pipewire] unsupported DMA buffer format: %d",
+			     obs_pw->format.info.raw.format);
+			goto read_metadata;
+		}
 
 		g_clear_pointer(&obs_pw->texture, gs_texture_destroy);
 		obs_pw->texture = gs_texture_create(
@@ -415,7 +460,7 @@ read_metadata:
 
 		if (bitmap && bitmap->size.width > 0 &&
 		    bitmap->size.height > 0 &&
-		    spa_pixel_format_to_obs_pixel_format(
+		    spa_pixel_format_to_obs_format(
 			    bitmap->format, &format, &swap_red_blue)) {
 			const uint8_t *bitmap_data;
 
