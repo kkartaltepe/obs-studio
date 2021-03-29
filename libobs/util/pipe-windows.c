@@ -222,3 +222,9 @@ size_t os_process_pipe_write(os_process_pipe_t *pp, const uint8_t *data,
 
 	return 0;
 }
+
+int os_process_pipe_set_size(os_process_pipe_t *pp, uint32_t size) {
+	UNUSED_PARAMETER(pp);
+	UNUSED_PARAMETER(size);
+	return 0;
+}

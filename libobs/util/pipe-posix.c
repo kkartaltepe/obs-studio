@@ -14,6 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#ifdef __linux__
+#define _GNU_SOURCE
+#include <fcntl.h>
+#endif
+
 #include <stdio.h>
 #include <sys/wait.h>
 
@@ -101,4 +106,30 @@ size_t os_process_pipe_write(os_process_pipe_t *pp, const uint8_t *data,
 		written += ret;
 	}
 	return written;
+}
+
+int os_process_pipe_set_size(os_process_pipe_t *pp, uint32_t size) {
+#ifdef __linux__
+	char buf[32] = {0};
+	ssize_t len = 0;
+	FILE *f = fopen("/proc/sys/fs/pipe-max-size", "r");
+	if (!f)
+		return fcntl(fileno(pp->file), F_SETPIPE_SZ, size);
+
+	len = fread(buf, sizeof(char), 32, f);
+	// dont bother if max is near page size (4 digits)
+	if (len < 4)
+		return fcntl(fileno(pp->file), F_SETPIPE_SZ, size);
+
+	uint32_t max = 0;
+	if (!sscanf(buf, "%u", &max))
+		return fcntl(fileno(pp->file), F_SETPIPE_SZ, size);
+
+	// without checking pipe-max-size this would do nothing on too large of a value.
+	return fcntl(fileno(pp->file), F_SETPIPE_SZ, max < size ? max : size);
+#else
+	UNUSED_PARAMETER(pp);
+	UNUSED_PARAMETER(size);
+	return 0;
+#endif
 }

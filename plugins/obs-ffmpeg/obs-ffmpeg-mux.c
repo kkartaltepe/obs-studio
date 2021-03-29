@@ -350,6 +350,8 @@ static bool ffmpeg_mux_start(void *data)
 		warn("Failed to create process pipe");
 		return false;
 	}
+	// Increase buffer to the muxer to avoid encoder stalls on slow disks.
+	os_process_pipe_set_size(stream->pipe, 1048576);
 
 	/* write headers and start capture */
 	os_atomic_set_bool(&stream->active, true);
