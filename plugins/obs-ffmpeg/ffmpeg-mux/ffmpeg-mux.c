@@ -27,6 +27,7 @@
 #include "ffmpeg-mux.h"
 
 #include <util/dstr.h>
+#include <util/threading.h>
 #include <libavformat/avformat.h>
 
 #define ANSI_COLOR_RED "\x1b[0;91m"
@@ -776,7 +777,7 @@ static inline int64_t rescale_ts(struct ffmpeg_mux *ffm,
 }
 
 static inline bool ffmpeg_mux_packet(struct ffmpeg_mux *ffm, uint8_t *buf,
-				     struct ffm_packet_info *info)
+				     struct ffm_packet_info *info, int loop)
 {
 	int idx = get_index(ffm, info);
 	AVPacket packet = {0};
@@ -803,7 +804,8 @@ static inline bool ffmpeg_mux_packet(struct ffmpeg_mux *ffm, uint8_t *buf,
 	int ret = av_interleaved_write_frame(ffm->output, &packet);
 
 	if (ret < 0) {
-		fprintf(stderr, "av_interleaved_write_frame failed: %d: %s\n",
+		fprintf(stderr,
+			"av_interleaved_write_frame failed(%d): %d: %s\n", loop,
 			ret, av_err2str(ret));
 	}
 
@@ -817,17 +819,75 @@ static inline bool ffmpeg_mux_packet(struct ffmpeg_mux *ffm, uint8_t *buf,
 
 /* ------------------------------------------------------------------------- */
 
+pthread_mutex_t rb_lock;
+os_sem_t *rb_wait_space;
+os_sem_t *rb_wait_data;
+int rb_head;
+int rb_tail;
+#define MAX_BUFFERED_FRAMES 32
+struct resize_buf rb[MAX_BUFFERED_FRAMES];
+struct ffm_packet_info info[MAX_BUFFERED_FRAMES];
+bool fail;
+
+struct ffmpeg_mux ffm;
+
+void *mux_thread(void *data)
+{
+	int loop = 0;
+	UNUSED_PARAMETER(data);
+	while (!fail) {
+		pthread_mutex_lock(&rb_lock);
+		while ((rb_tail + 1) % MAX_BUFFERED_FRAMES == rb_head) {
+			pthread_mutex_unlock(&rb_lock);
+			os_sem_wait(rb_wait_data);
+			if (fail) {
+				return (void *)-1;
+			}
+			pthread_mutex_lock(&rb_lock);
+		}
+		int tail = (rb_tail + 1) % MAX_BUFFERED_FRAMES;
+		pthread_mutex_unlock(&rb_lock);
+
+		fail |= !ffmpeg_mux_packet(&ffm, rb[tail].buf,
+					   &info[tail], loop);
+
+		pthread_mutex_lock(&rb_lock);
+		rb_tail = tail;
+		pthread_mutex_unlock(&rb_lock);
+		os_sem_post(rb_wait_space);
+		++loop;
+	}
+
+	return NULL;
+}
+
 #ifdef _WIN32
 int wmain(int argc, wchar_t *argv_w[])
 #else
 int main(int argc, char *argv[])
 #endif
 {
-	struct ffm_packet_info info = {0};
-	struct ffmpeg_mux ffm = {0};
-	struct resize_buf rb = {0};
-	bool fail = false;
 	int ret;
+	for (int i = 0; i < MAX_BUFFERED_FRAMES; i++) {
+		memset(&rb[i], 0, sizeof(rb));
+		memset(&info[i], 0, sizeof(struct ffm_packet_info));
+	}
+	memset(&rb_lock, 0, sizeof(rb_lock));
+	rb_wait_space = NULL;
+	rb_wait_data = NULL;
+	rb_head = 1;
+	rb_tail = 0;
+
+	memset(&ffm, 0, sizeof(struct ffmpeg_mux));
+	fail = false;
+	int loops = 0;
+
+	pthread_mutex_init(&rb_lock, NULL);
+	if ((os_sem_init(&rb_wait_data, 0) != 0) ||
+	    (os_sem_init(&rb_wait_space, 0) != 0)) {
+		fprintf(stderr, "Couldn't initialize semephore for frames\n");
+		return -1;
+	}
 
 #ifdef _WIN32
 	char **argv;
@@ -857,23 +917,59 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
-	while (!fail && safe_read(&info, sizeof(info)) == sizeof(info)) {
-		resize_buf_resize(&rb, info.size);
+	pthread_t mux_handle;
+	ret = pthread_create(&mux_handle, NULL, &mux_thread, NULL);
+	if (ret) {
+		fprintf(stderr, "Couldn't initialize muxing thread\n");
+		return ret;
+	}
 
-		if (safe_read(rb.buf, info.size) == info.size) {
-			fail = !ffmpeg_mux_packet(&ffm, rb.buf, &info);
-		} else {
+	while (!fail) {
+		pthread_mutex_lock(&rb_lock);
+		while (rb_tail == (rb_head + 1) % MAX_BUFFERED_FRAMES) {
+			pthread_mutex_unlock(&rb_lock);
+			os_sem_wait(rb_wait_space);
+			if (fail) {
+				goto cleanup;
+			}
+			pthread_mutex_lock(&rb_lock);
+		}
+		pthread_mutex_unlock(&rb_lock);
+
+		if (safe_read(&info[rb_head], sizeof(struct ffm_packet_info)) !=
+		    sizeof(struct ffm_packet_info)) {
 			fail = true;
+			goto cleanup;
+		}
+		loops += 1;
+
+		resize_buf_resize(&rb[rb_head], info[rb_head].size);
+
+		if (safe_read(rb[rb_head].buf, info[rb_head].size) ==
+		    info[rb_head].size) {
+			// fprintf(stderr, "Pushed buffer(%d)\n", rb_head);
+			pthread_mutex_lock(&rb_lock);
+			rb_head = (rb_head + 1) % MAX_BUFFERED_FRAMES;
+			pthread_mutex_unlock(&rb_lock);
+			os_sem_post(rb_wait_data);
 		}
 	}
 
+cleanup:
+	fail = true;
+	os_sem_post(rb_wait_data);
+	pthread_join(mux_handle, NULL);
 	ffmpeg_mux_free(&ffm);
-	resize_buf_free(&rb);
+	for (int i = 0; i < MAX_BUFFERED_FRAMES; i++) {
+		resize_buf_free(&rb[i]);
+	}
 
 #ifdef _WIN32
 	for (int i = 0; i < argc; i++)
 		free(argv[i]);
 	free(argv);
 #endif
+	fprintf(stderr, "Bailing for some reason, I hope you know why: %d\n",
+		loops);
 	return 0;
 }

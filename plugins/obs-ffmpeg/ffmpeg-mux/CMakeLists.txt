@@ -1,5 +1,10 @@
 project(obs-ffmpeg-mux)
 
+if(MSVC)
+	set(obs-ffmpeg_PLATFORM_DEPS
+		w32-pthreads)
+endif()
+
 if(DEBUG_FFMPEG_MUX)
 	add_definitions(-DDEBUG_FFMPEG)
 endif()
@@ -7,6 +12,8 @@ endif()
 find_package(FFmpeg REQUIRED
 	COMPONENTS avcodec avutil avformat)
 include_directories(${FFMPEG_INCLUDE_DIRS})
+
+find_package(Threads REQUIRED)
 
 set(obs-ffmpeg-mux_SOURCES
 	ffmpeg-mux.c)
@@ -20,6 +27,7 @@ add_executable(obs-ffmpeg-mux
 
 target_link_libraries(obs-ffmpeg-mux
 	libobs
+	${Threads_LIBRARIES}
 	${FFMPEG_LIBRARIES})
 
 set_target_properties(obs-ffmpeg-mux PROPERTIES FOLDER "plugins/obs-ffmpeg")
