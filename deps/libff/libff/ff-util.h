@@ -40,6 +40,7 @@ const char *ff_codec_desc_name(const struct ff_codec_desc *codec_desc);
 const char *ff_codec_desc_long_name(const struct ff_codec_desc *codec_desc);
 enum ff_codec_type ff_codec_desc_type(const struct ff_codec_desc *codec_desc);
 bool ff_codec_desc_is_alias(const struct ff_codec_desc *codec_desc);
+bool ff_codec_desc_requires_hwctx(const char *codec_name);
 const char *ff_codec_desc_base_name(const struct ff_codec_desc *codec_desc);
 int ff_codec_desc_id(const struct ff_codec_desc *codec_desc);
 const struct ff_codec_desc *

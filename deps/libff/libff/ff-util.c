@@ -243,6 +243,23 @@ bool ff_codec_desc_is_alias(const struct ff_codec_desc *codec_desc)
 		return false;
 }
 
+bool ff_codec_desc_requires_hwctx(const char *codec_name)
+{
+	if (codec_name == NULL)
+		return false;
+	AVCodec *codec = avcodec_find_encoder_by_name(codec_name);
+	if (codec == NULL)
+		return false;
+	AVCodecHWConfig *cfg = avcodec_get_hw_config(codec, 0);
+	if (cfg == NULL)
+		return false;
+	// ffmpeg internal setup can occur, no context config is required.
+	if (cfg->methods & AV_CODEC_HW_CONFIG_METHOD_INTERNAL)
+		return false;
+
+	return true;
+}
+
 const char *ff_codec_desc_base_name(const struct ff_codec_desc *codec_desc)
 {
 	if (codec_desc != NULL)
@@ -386,6 +403,7 @@ bool ff_format_desc_has_video(const struct ff_format_desc *format_desc)
 	else
 		return false;
 }
+
 
 int ff_format_desc_audio(const struct ff_format_desc *format_desc)
 {

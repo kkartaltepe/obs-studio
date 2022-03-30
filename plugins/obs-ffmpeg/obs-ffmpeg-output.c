@@ -245,6 +245,22 @@ static bool create_video_stream(struct ffmpeg_data *data)
 	context->colorspace = data->config.colorspace;
 	context->thread_count = 0;
 
+	AVCodecHWConfig *hw_cfg = avcodec_get_hw_config(data->vcodec, 0);
+	blog(LOG_INFO, "hw_cfg: %p", hw_cfg);
+	if (hw_cfg &&
+	    hw_cfg->methods & (AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX |
+			       AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX)) {
+		int err = 0;
+		AVBufferRef *hw_device_ctx = NULL;
+		if ((err = av_hwdevice_ctx_create(&hw_device_ctx,
+						  hw_cfg->device_type, "/dev/dri/renderD128",
+						  NULL, 0)) < 0) {
+			blog(LOG_ERROR, "failed to create hardware codec context");
+			return false;
+		}
+		context->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+	}
+
 	data->video->time_base = context->time_base;
 
 	if (data->output->oformat->flags & AVFMT_GLOBALHEADER)

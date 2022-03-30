@@ -484,6 +484,7 @@ OBSBasicSettings::OBSBasicSettings(QWidget *parent)
 	HookWidget(ui->advOutFFRescale,      CBEDIT_CHANGED, OUTPUTS_CHANGED);
 	HookWidget(ui->advOutFFVEncoder,     COMBO_CHANGED,  OUTPUTS_CHANGED);
 	HookWidget(ui->advOutFFVCfg,         EDIT_CHANGED,   OUTPUTS_CHANGED);
+	HookWidget(ui->advOutFFVHWDevice,    EDIT_CHANGED,   OUTPUTS_CHANGED);
 	HookWidget(ui->advOutFFABitrate,     SCROLL_CHANGED, OUTPUTS_CHANGED);
 	HookWidget(ui->advOutFFTrack1,       CHECK_CHANGED,  OUTPUTS_CHANGED);
 	HookWidget(ui->advOutFFTrack2,       CHECK_CHANGED,  OUTPUTS_CHANGED);
@@ -2086,6 +2087,8 @@ void OBSBasicSettings::LoadAdvOutputFFmpegSettings()
 		config_get_int(main->Config(), "AdvOut", "FFAEncoderId");
 	const char *aEncCustom =
 		config_get_string(main->Config(), "AdvOut", "FFACustom");
+	const char *vHWDevice =
+		config_get_string(main->Config(), "AdvOut", "FFVHWDevice");
 
 	ui->advOutFFType->setCurrentIndex(saveFile ? 0 : 1);
 	ui->advOutFFRecPath->setText(QT_UTF8(path));
@@ -2101,6 +2104,11 @@ void OBSBasicSettings::LoadAdvOutputFFmpegSettings()
 	ui->advOutFFRescale->setCurrentText(rescaleRes);
 	SelectEncoder(ui->advOutFFVEncoder, vEncoder, vEncoderId);
 	ui->advOutFFVCfg->setText(vEncCustom);
+	ui->advOutFFVHWDevice->setText(vHWDevice);
+	ui->advOutFFVHWDevice->setVisible(
+		ff_codec_desc_requires_hwctx(vEncoder));
+	ui->advOutFFVHWDeviceLabel->setVisible(
+		ff_codec_desc_requires_hwctx(vEncoder));
 	ui->advOutFFABitrate->setValue(audioBitrate);
 	SelectEncoder(ui->advOutFFAEncoder, aEncoder, aEncoderId);
 	ui->advOutFFACfg->setText(aEncCustom);
@@ -3530,6 +3538,7 @@ void OBSBasicSettings::SaveOutputSettings()
 	SaveCombo(ui->advOutFFRescale, "AdvOut", "FFRescaleRes");
 	SaveEncoder(ui->advOutFFVEncoder, "AdvOut", "FFVEncoder");
 	SaveEdit(ui->advOutFFVCfg, "AdvOut", "FFVCustom");
+	SaveEdit(ui->advOutFFVHWDevice, "AdvOut", "FFVHWDevice");
 	SaveSpinBox(ui->advOutFFABitrate, "AdvOut", "FFABitrate");
 	SaveEncoder(ui->advOutFFAEncoder, "AdvOut", "FFAEncoder");
 	SaveEdit(ui->advOutFFACfg, "AdvOut", "FFACustom");
@@ -4018,6 +4027,10 @@ void OBSBasicSettings::on_advOutFFVEncoder_currentIndexChanged(int idx)
 		SetAdvOutputFFmpegEnablement(
 			FF_CODEC_VIDEO, desc.id != 0 || desc.name != nullptr,
 			true);
+		ui->advOutFFVHWDevice->setVisible(
+			ff_codec_desc_requires_hwctx(desc.name));
+		ui->advOutFFVHWDeviceLabel->setVisible(
+			ff_codec_desc_requires_hwctx(desc.name));
 	}
 }
 
