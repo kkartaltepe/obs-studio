@@ -206,7 +206,6 @@ static bool init_swscale(struct ffmpeg_data *data, AVCodecContext *context)
 	return true;
 }
 
-static AVBufferRef *hw_device_ctx = NULL;
 static bool create_video_stream(struct ffmpeg_data *data)
 {
 	enum AVPixelFormat closest_format;
@@ -251,8 +250,9 @@ static bool create_video_stream(struct ffmpeg_data *data)
 	if (hw_cfg &&
 	    hw_cfg->methods & (AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX)) {
 		int err = 0;
+		AVBufferRef *hw_device_ctx = NULL;
 		if ((err = av_hwdevice_ctx_create(&hw_device_ctx,
-						  hw_cfg->device_type, NULL,
+						  hw_cfg->device_type, strlen(data->config.video_hw_device) > 0 ? data->config.video_hw_device : NULL,
 						  NULL, 0)) < 0) {
 			blog(LOG_ERROR, "failed to create hardware codec context: %s", av_err2str(err));
 			return false;
@@ -1158,6 +1158,7 @@ static bool try_connect(struct ffmpeg_output *output)
 	config.audio_encoder_id =
 		(int)obs_data_get_int(settings, "audio_encoder_id");
 	config.video_settings = obs_data_get_string(settings, "video_settings");
+	config.video_hw_device = obs_data_get_string(settings, "video_hw_device");
 	config.audio_settings = obs_data_get_string(settings, "audio_settings");
 	config.scale_width = (int)obs_data_get_int(settings, "scale_width");
 	config.scale_height = (int)obs_data_get_int(settings, "scale_height");

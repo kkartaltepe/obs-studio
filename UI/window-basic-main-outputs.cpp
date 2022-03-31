@@ -1494,6 +1494,8 @@ inline void AdvancedOutput::SetupFFmpeg()
 		config_get_int(main->Config(), "AdvOut", "FFVEncoderId");
 	const char *vEncCustom =
 		config_get_string(main->Config(), "AdvOut", "FFVCustom");
+	const char *vHWDevice =
+		config_get_string(main->Config(), "AdvOut", "FFVHWDevice");
 	int aBitrate = config_get_int(main->Config(), "AdvOut", "FFABitrate");
 	int aMixes = config_get_int(main->Config(), "AdvOut", "FFAudioMixes");
 	const char *aEncoder =
@@ -1513,6 +1515,7 @@ inline void AdvancedOutput::SetupFFmpeg()
 	obs_data_set_string(settings, "video_encoder", vEncoder);
 	obs_data_set_int(settings, "video_encoder_id", vEncoderId);
 	obs_data_set_string(settings, "video_settings", vEncCustom);
+	obs_data_set_string(settings, "video_hw_device", vHWDevice);
 	obs_data_set_int(settings, "audio_bitrate", aBitrate);
 	obs_data_set_string(settings, "audio_encoder", aEncoder);
 	obs_data_set_int(settings, "audio_encoder_id", aEncoderId);

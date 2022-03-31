@@ -19,6 +19,7 @@ struct ffmpeg_cfg {
 	const char *audio_encoder;
 	int audio_encoder_id;
 	const char *video_settings;
+	const char *video_hw_device;
 	const char *audio_settings;
 	int audio_mix_count;
 	int audio_tracks;
