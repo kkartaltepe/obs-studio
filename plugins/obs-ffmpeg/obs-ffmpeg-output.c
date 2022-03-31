@@ -167,7 +167,7 @@ static bool open_video_codec(struct ffmpeg_data *data)
 		return false;
 	}
 
-	data->vframe->format = context->pix_fmt;
+	data->vframe->format = context->hw_frames_ctx ? ((AVHWFramesContext *)context->hw_frames_ctx->data)->sw_format : context->pix_fmt;
 	data->vframe->width = context->width;
 	data->vframe->height = context->height;
 	data->vframe->color_range = data->config.color_range;
@@ -195,7 +195,7 @@ static bool init_swscale(struct ffmpeg_data *data, AVCodecContext *context)
 	data->swscale = sws_getContext(
 		data->config.width, data->config.height, data->config.format,
 		data->config.scale_width, data->config.scale_height,
-		context->pix_fmt, SWS_BICUBIC, NULL, NULL, NULL);
+		context->hw_frames_ctx ? ((AVHWFramesContext *)context->hw_frames_ctx->data)->sw_format : context->pix_fmt, SWS_BICUBIC, NULL, NULL, NULL);
 
 	if (!data->swscale) {
 		ffmpeg_log_error(LOG_WARNING, data,
@@ -206,6 +206,7 @@ static bool init_swscale(struct ffmpeg_data *data, AVCodecContext *context)
 	return true;
 }
 
+static AVBufferRef *hw_device_ctx = NULL;
 static bool create_video_stream(struct ffmpeg_data *data)
 {
 	enum AVPixelFormat closest_format;
@@ -248,17 +249,28 @@ static bool create_video_stream(struct ffmpeg_data *data)
 	AVCodecHWConfig *hw_cfg = avcodec_get_hw_config(data->vcodec, 0);
 	blog(LOG_INFO, "hw_cfg: %p", hw_cfg);
 	if (hw_cfg &&
-	    hw_cfg->methods & (AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX |
-			       AV_CODEC_HW_CONFIG_METHOD_HW_DEVICE_CTX)) {
+	    hw_cfg->methods & (AV_CODEC_HW_CONFIG_METHOD_HW_FRAMES_CTX)) {
 		int err = 0;
-		AVBufferRef *hw_device_ctx = NULL;
 		if ((err = av_hwdevice_ctx_create(&hw_device_ctx,
-						  hw_cfg->device_type, "/dev/dri/renderD128",
+						  hw_cfg->device_type, NULL,
 						  NULL, 0)) < 0) {
-			blog(LOG_ERROR, "failed to create hardware codec context");
+			blog(LOG_ERROR, "failed to create hardware codec context: %s", av_err2str(err));
 			return false;
 		}
-		context->hw_device_ctx = av_buffer_ref(hw_device_ctx);
+		AVBufferRef *hw_frames_ref = av_hwframe_ctx_alloc(hw_device_ctx);
+		AVHWFramesContext *hw_frames_ctx = (AVHWFramesContext *)(hw_frames_ref->data);
+		hw_frames_ctx->format = closest_format;
+		hw_frames_ctx->sw_format = AV_PIX_FMT_NV12;
+		hw_frames_ctx->width = data->config.scale_width;
+		hw_frames_ctx->height = data->config.scale_height;
+		hw_frames_ctx->initial_pool_size = 20;
+		if ((err = av_hwframe_ctx_init(hw_frames_ref)) < 0) {
+			blog(LOG_ERROR, "failed to create hardware codec frames: %s", av_err2str(err));
+			return false;
+		}
+		context->hw_frames_ctx = av_buffer_ref(hw_frames_ref);
+		av_buffer_unref(&hw_frames_ref);
+		av_buffer_unref(&hw_device_ctx);
 	}
 
 	data->video->time_base = context->time_base;
@@ -271,7 +283,8 @@ static bool create_video_stream(struct ffmpeg_data *data)
 	if (!open_video_codec(data))
 		return false;
 
-	if (context->pix_fmt != data->config.format ||
+	enum AVPixelFormat sw_fmt = context->hw_frames_ctx ? ((AVHWFramesContext *)context->hw_frames_ctx->data)->sw_format : context->pix_fmt;
+	if (sw_fmt != data->config.format ||
 	    data->config.width != data->config.scale_width ||
 	    data->config.height != data->config.scale_height) {
 
@@ -773,13 +786,21 @@ static void receive_video(void *param, struct video_data *frame)
 		//FIXME: stop the encode with an error
 		return;
 	}
-	if (!!data->swscale)
+
+	if (!!data->swscale) {
 		sws_scale(data->swscale, (const uint8_t *const *)frame->data,
 			  (const int *)frame->linesize, 0, data->config.height,
 			  data->vframe->data, data->vframe->linesize);
-	else
+	} else if (context->hw_frames_ctx) {
+		// Only mostly illegal, alignment requirements might change currently requires 32byte align in 5.0
+		for(int i = 0; i < 4; i++) {
+			data->vframe->linesize[i] = frame->linesize[i];
+			data->vframe->data[i] = frame->data[i];
+		}
+	} else  {
 		copy_data(data->vframe, frame, context->height,
-			  context->pix_fmt);
+			 context->pix_fmt);
+	}
 
 	packet = av_packet_alloc();
 
@@ -800,7 +821,21 @@ static void receive_video(void *param, struct video_data *frame)
 #endif
 		data->vframe->pts = data->total_frames;
 #if LIBAVFORMAT_VERSION_INT >= AV_VERSION_INT(57, 40, 101)
-		ret = avcodec_send_frame(context, data->vframe);
+		if (context->hw_frames_ctx) {
+			AVFrame *hw_frame = av_frame_alloc();
+			if ((ret = av_hwframe_get_buffer(context->hw_frames_ctx, hw_frame, 0)) < 0) {
+				blog(LOG_ERROR, "Failed to get next hw_frame");
+				goto fail;
+			}
+			if((ret = av_hwframe_transfer_data(hw_frame, data->vframe, 0)) < 0) {
+				blog(LOG_ERROR, "Failed to upload hw_frame");
+				goto fail;
+			}
+			hw_frame->pts = data->total_frames;
+			ret = avcodec_send_frame(context, hw_frame);
+			av_frame_unref(hw_frame);
+		} else
+			ret = avcodec_send_frame(context, data->vframe);
 		if (ret == 0)
 			ret = avcodec_receive_packet(context, packet);
 
@@ -814,8 +849,8 @@ static void receive_video(void *param, struct video_data *frame)
 		if (ret < 0) {
 			blog(LOG_WARNING,
 			     "receive_video: Error encoding "
-			     "video: %s",
-			     av_err2str(ret));
+			     "video: %d %s %p",
+			     ret, av_err2str(ret), frame);
 			//FIXME: stop the encode with an error
 			goto fail;
 		}
