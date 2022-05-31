@@ -52,6 +52,10 @@ struct gl_winsys_vtable {
 	void (*device_load_swapchain)(gs_device_t *device,
 				      gs_swapchain_t *swap);
 
+	const gs_swapchain_image_t *(*swapchain_acquire_image)(gs_swapchain_t *swap);
+	void (*swapchain_release_image)(gs_swapchain_t *swap,
+					const gs_swapchain_image_t *image);
+
 	void (*device_present)(gs_device_t *device);
 
 	struct gs_texture *(*device_texture_create_from_dmabuf)(

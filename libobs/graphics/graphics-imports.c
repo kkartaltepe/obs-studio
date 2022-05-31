@@ -119,6 +119,9 @@ bool load_graphics_imports(struct gs_exports *exports, void *module,
 	GRAPHICS_IMPORT(device_projection_push);
 	GRAPHICS_IMPORT(device_projection_pop);
 
+	GRAPHICS_IMPORT(device_swapchain_acquire_image);
+	GRAPHICS_IMPORT(device_swapchain_release_image);
+
 	GRAPHICS_IMPORT(gs_swapchain_destroy);
 
 	GRAPHICS_IMPORT(gs_texture_destroy);

@@ -180,6 +180,14 @@ void OBSQTDisplay::CreateDisplay(bool force)
 void OBSQTDisplay::paintEvent(QPaintEvent *event)
 {
 	CreateDisplay();
+	// TODO: GBM init fails I guess.
+	if (!display)
+		return;
+	// TODO: Do the deed between display and windowHandle()
+	const obs_display_image_t *image = obs_display_acquire_image(display);
+	// do some shit
+	obs_display_release_image(display, image);
+	// Or should we hold the frame until we get to the next paint? Its not known when the egl platform will finish rendering and displaying.
 
 	QWidget::paintEvent(event);
 }

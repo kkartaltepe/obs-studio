@@ -281,3 +281,16 @@ void obs_display_size(obs_display_t *display, uint32_t *width, uint32_t *height)
 		pthread_mutex_unlock(&display->draw_info_mutex);
 	}
 }
+
+const obs_display_image_t *obs_display_acquire_image(obs_display_t *display)
+{
+	return (const obs_display_image_t *)gs_swapchain_acquire_image(
+		display->swap);
+}
+
+void obs_display_release_image(obs_display_t *display,
+			       const obs_display_image_t *image)
+{
+	gs_swapchain_release_image(display->swap,
+				   (const gs_swapchain_image_t *)image);
+}

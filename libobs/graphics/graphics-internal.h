@@ -280,6 +280,12 @@ struct gs_exports {
 					  const float color[4]);
 	void (*device_debug_marker_end)(gs_device_t *device);
 
+	const gs_swapchain_image_t *(*device_swapchain_acquire_image)(
+		gs_device_t *device, gs_swapchain_t *swap);
+	void (*device_swapchain_release_image)(
+		gs_device_t *device, gs_swapchain_t *swap,
+		const gs_swapchain_image_t *image);
+
 #ifdef __APPLE__
 	/* OSX/Cocoa specific functions */
 	gs_texture_t *(*device_texture_create_from_iosurface)(gs_device_t *dev,

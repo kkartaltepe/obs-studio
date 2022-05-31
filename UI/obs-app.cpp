@@ -1430,12 +1430,17 @@ bool OBSApp::OBSInit()
 		setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
 		blog(LOG_INFO, "Platform: Wayland");
 	}
+
+	obs_set_nix_platform(OBS_NIX_PLATFORM_GBM);
 #endif
+
 
 	QPlatformNativeInterface *native =
 		QGuiApplication::platformNativeInterface();
 	obs_set_nix_platform_display(
 		native->nativeResourceForIntegration("display"));
+
+	obs_set_nix_platform(OBS_NIX_PLATFORM_GBM);
 #endif
 
 	if (!StartupOBS(locale.c_str(), GetProfilerNameStore()))

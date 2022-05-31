@@ -681,6 +681,18 @@ static bool gl_x11_egl_device_query_dmabuf_modifiers_for_format(
 		plat->xdisplay, drm_format, modifiers, n_modifiers);
 }
 
+static const gs_swapchain_image_t *
+gl_x11_egl_swapchain_acquire_image(gs_swapchain_t *swap)
+{
+	return NULL;
+}
+
+static void
+gl_x11_egl_swapchain_release_image(gs_swapchain_t *swap,
+				   const gs_swapchain_image_t *image)
+{
+}
+
 static const struct gl_winsys_vtable egl_x11_winsys_vtable = {
 	.windowinfo_create = gl_x11_egl_windowinfo_create,
 	.windowinfo_destroy = gl_x11_egl_windowinfo_destroy,
@@ -704,6 +716,8 @@ static const struct gl_winsys_vtable egl_x11_winsys_vtable = {
 		gl_x11_egl_device_query_dmabuf_modifiers_for_format,
 	.device_texture_create_from_pixmap =
 		gl_x11_egl_device_texture_create_from_pixmap,
+	.swapchain_acquire_image = gl_x11_egl_swapchain_acquire_image,
+	.swapchain_release_image = gl_x11_egl_swapchain_release_image,
 };
 
 const struct gl_winsys_vtable *gl_x11_egl_get_winsys_vtable(void)

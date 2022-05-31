@@ -281,6 +281,7 @@ struct gs_effect_pass;
 struct gs_effect_param;
 struct gs_device;
 struct graphics_subsystem;
+struct gs_swapchain_image;
 
 typedef struct gs_texture gs_texture_t;
 typedef struct gs_stage_surface gs_stagesurf_t;
@@ -300,6 +301,7 @@ typedef struct gs_effect_pass gs_epass_t;
 typedef struct gs_effect_param gs_eparam_t;
 typedef struct gs_device gs_device_t;
 typedef struct graphics_subsystem graphics_t;
+typedef struct gs_swapchain_image gs_swapchain_image_t;
 
 /* ---------------------------------------------------
  * shader functions
@@ -647,6 +649,9 @@ EXPORT void gs_reset_blend_state(void);
 /* library-specific functions */
 
 EXPORT gs_swapchain_t *gs_swapchain_create(const struct gs_init_data *data);
+
+EXPORT const gs_swapchain_image_t *gs_swapchain_acquire_image(struct gs_swap_chain *sc);
+EXPORT void gs_swapchain_release_image(struct gs_swap_chain *sc, const gs_swapchain_image_t *image);
 
 EXPORT void gs_resize(uint32_t x, uint32_t y);
 EXPORT void gs_update_color_space(void);

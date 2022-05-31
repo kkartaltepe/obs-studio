@@ -51,6 +51,7 @@ struct obs_service;
 struct obs_module;
 struct obs_fader;
 struct obs_volmeter;
+struct obs_display_image;
 
 typedef struct obs_context_data obs_object_t;
 typedef struct obs_display obs_display_t;
@@ -64,6 +65,7 @@ typedef struct obs_service obs_service_t;
 typedef struct obs_module obs_module_t;
 typedef struct obs_fader obs_fader_t;
 typedef struct obs_volmeter obs_volmeter_t;
+typedef struct obs_display_image obs_display_image_t;
 
 typedef struct obs_weak_object obs_weak_object_t;
 typedef struct obs_weak_source obs_weak_source_t;
@@ -938,6 +940,10 @@ EXPORT void obs_display_set_background_color(obs_display_t *display,
 
 EXPORT void obs_display_size(obs_display_t *display, uint32_t *width,
 			     uint32_t *height);
+
+
+EXPORT const obs_display_image_t *obs_display_acquire_image(obs_display_t *display);
+EXPORT void obs_display_release_image(obs_display_t *display, const obs_display_image_t *image);
 
 /* ------------------------------------------------------------------------- */
 /* Sources */

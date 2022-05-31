@@ -1931,6 +1931,32 @@ void gs_load_swapchain(gs_swapchain_t *swapchain)
 	graphics->exports.device_load_swapchain(graphics->device, swapchain);
 }
 
+const gs_swapchain_image_t *
+gs_swapchain_acquire_image(gs_swapchain_t *swapchain)
+{
+	//TODO: These are supposed to be called off graphics thread right now.
+	graphics_t *graphics = thread_graphics;
+
+	if (!gs_valid("gs_swapchain_acquire_image"))
+		return;
+
+	graphics->exports.device_swapchain_acquire_image(graphics->device,
+							 swapchain);
+}
+
+void gs_swapchain_release_image(gs_swapchain_t *swapchain,
+				const gs_swapchain_image_t *image)
+{
+	//TODO: These are supposed to be called off graphics thread right now.
+	graphics_t *graphics = thread_graphics;
+
+	if (!gs_valid("gs_swapchain_release_image"))
+		return;
+
+	graphics->exports.device_swapchain_release_image(graphics->device,
+							 swapchain, image);
+}
+
 void gs_clear(uint32_t clear_flags, const struct vec4 *color, float depth,
 	      uint8_t stencil)
 {

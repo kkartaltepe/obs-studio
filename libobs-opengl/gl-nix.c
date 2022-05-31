@@ -22,6 +22,8 @@
 #include "gl-wayland-egl.h"
 #endif
 
+#include "gl-gbm.h"
+
 static const struct gl_winsys_vtable *gl_vtable = NULL;
 
 static void init_winsys(void)
@@ -38,6 +40,9 @@ static void init_winsys(void)
 		blog(LOG_INFO, "Using EGL/Wayland");
 		break;
 #endif
+	case OBS_NIX_PLATFORM_GBM:
+		gl_vtable = gl_gbm_get_winsys_vtable();
+		blog(LOG_INFO, "Using EGL/GBM");
 	}
 
 	assert(gl_vtable != NULL);
@@ -118,6 +123,20 @@ extern void device_load_swapchain(gs_device_t *device, gs_swapchain_t *swap)
 extern void device_present(gs_device_t *device)
 {
 	gl_vtable->device_present(device);
+}
+
+extern const gs_swapchain_image_t *
+device_swapchain_acquire_image(gs_device_t *device, gs_swapchain_t *swap)
+{
+	UNUSED_PARAMETER(device);
+	return gl_vtable->swapchain_acquire_image(swap);
+}
+
+extern void device_swapchain_release_image(gs_device_t *device, gs_swapchain_t *swap,
+				      const gs_swapchain_image_t *image)
+{
+	UNUSED_PARAMETER(device);
+	return gl_vtable->swapchain_release_image(swap, image);
 }
 
 extern bool device_is_monitor_hdr(gs_device_t *device, void *monitor)
