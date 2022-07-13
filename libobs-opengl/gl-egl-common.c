@@ -71,8 +71,8 @@ static bool init_egl_image_target_texture_2d_ext(void)
 		initialized = true;
 
 		if (!find_gl_extension("GL_OES_EGL_image")) {
-			blog(LOG_ERROR, "No GL_OES_EGL_image");
-			return false;
+			blog(LOG_ERROR,
+			     "No GL_OES_EGL_image, trying to load anyway.\nThis configuration will crash and is unsupportable. Do not file bugs.");
 		}
 
 		glEGLImageTargetTexture2DOES =
