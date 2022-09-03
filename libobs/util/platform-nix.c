@@ -14,6 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <errno.h>
 #include <sys/types.h>
@@ -22,6 +23,7 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <link.h>
 #include <dlfcn.h>
 #include <unistd.h>
 #include <glob.h>
@@ -97,13 +99,58 @@ void os_dlclose(void *module)
 		dlclose(module);
 }
 
+int module_has_qt5_check(const char *path)
+{
+	void *mod = os_dlopen(path);
+	if (mod == NULL) {
+		return 1;
+	}
+
+	struct link_map *list = NULL;
+	if (dlinfo(mod, RTLD_DI_LINKMAP, &list) == 0) {
+		for (struct link_map *ptr = list; ptr; ptr = ptr->l_next) {
+			char *slash = strrchr(ptr->l_name, '/');
+			if (!slash)
+				continue;
+			char *base = slash + 1;
+			if (strncmp(base, "libQt5", 6) == 0) {
+				return 0;
+			}
+		}
+	}
+
+	return 1;
+}
+
+void fork_and_qt5_check(const char *path, bool *can_load)
+{
+	pid_t pid = fork();
+	if (pid == 0) {
+		_exit(module_has_qt5_check(path));
+	}
+	if (pid < 0) {
+		return;
+	}
+	int status;
+	if (waitpid(pid, &status, 0) < 0) {
+		return;
+	}
+	if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+		*can_load = false;
+	}
+}
+
 void get_plugin_info(const char *path, bool *is_obs_plugin, bool *can_load)
 {
 	*is_obs_plugin = true;
 #if OBS_QT_VERSION == 6
+	/*
 	char cmd[2048];
 	snprintf(cmd, 2048, "grep -q 'libQt5' \"%s\"", path);
 	*can_load = !!system(cmd);
+	*/
+	*can_load = true;
+	fork_and_qt5_check(path, can_load);
 #else
 	*can_load = true;
 #endif
