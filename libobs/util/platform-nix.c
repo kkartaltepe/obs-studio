@@ -27,6 +27,7 @@
 #include <glob.h>
 #include <time.h>
 #include <signal.h>
+#include <stdlib.h>
 
 #include "obsconfig.h"
 
@@ -99,7 +100,13 @@ void os_dlclose(void *module)
 void get_plugin_info(const char *path, bool *is_obs_plugin, bool *can_load)
 {
 	*is_obs_plugin = true;
+#if OBS_QT_VERSION == 6
+	char cmd[2048];
+	snprintf(cmd, 2048, "grep -q 'libQt5' \"%s\"", path);
+	*can_load = !!system(cmd);
+#else
 	*can_load = true;
+#endif
 	UNUSED_PARAMETER(path);
 }
 
