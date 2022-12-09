@@ -62,22 +62,13 @@ double TimeDiffMsec(mfxTime tfinish, mfxTime tstart)
 	return 0.0;
 }
 
-extern "C" bool is_intel_gpu_primary()
-{
-	return true;
-}
 
-extern "C" bool prefer_current_or_igpu_enc(int *iGPUIndex)
+bool is_windows8_or_greater()
 {
 	return false;
 }
 
-extern "C" bool is_windows8_or_greater()
-{
-	return false;
-}
-
-extern "C" void util_cpuid(int cpuinfo[4], int level)
+void util_cpuid(int cpuinfo[4], int level)
 {
 	__get_cpuid(level, (unsigned int *)&cpuinfo[0],
 		    (unsigned int *)&cpuinfo[1], (unsigned int *)&cpuinfo[2],

@@ -152,13 +152,5 @@ void mfxGetTime(mfxTime *timestamp);
 //void mfxInitTime();  might need this for Windows
 double TimeDiffMsec(mfxTime tfinish, mfxTime tstart);
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-bool is_intel_gpu_primary();
-bool prefer_current_or_igpu_enc(int *iGPUIndex);
 bool is_windows8_or_greater();
 void util_cpuid(int cpuinfo[4], int level);
-#ifdef __cplusplus
-}
-#endif
