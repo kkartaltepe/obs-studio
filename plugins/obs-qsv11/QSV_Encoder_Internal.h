@@ -57,7 +57,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mfxastructures.h"
 #include "mfxvideo++.h"
 #include "QSV_Encoder.h"
-#include "common_utils.h"
+#include "platform/common_utils.h"
 
 #include <vector>
 

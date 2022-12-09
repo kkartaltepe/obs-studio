@@ -1,8 +1,6 @@
 #pragma once
 
-#if defined(_WIN32) || defined(_WIN64)
-
-#include "common_utils.h"
+#include "platform/common_utils.h"
 
 #pragma warning(disable : 4201)
 #include <initguid.h>
@@ -106,4 +104,3 @@ private:
 	BOOL m_bIsA2rgb10;
 };
 
-#endif // #if defined( _WIN32 ) || defined ( _WIN64 )

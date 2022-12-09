@@ -2,7 +2,10 @@
 
 #include <stdio.h>
 
-#include "mfxvideo++.h"
+#include <mfxvideo.h>
+#ifdef __cplusplus
+#include <mfxvideo++.h>
+#endif
 
 // =================================================================
 // OS-specific definitions of types, macro, etc...
@@ -11,9 +14,9 @@
 //  - MSDK_FOPEN
 //  - MSDK_SLEEP
 #if defined(_WIN32) || defined(_WIN64)
-#include "bits/windows_defs.h"
+#include "../bits/windows_defs.h"
 #elif defined(__linux__)
-#include "bits/linux_defs.h"
+#include "../bits/linux_defs.h"
 #endif
 
 // =================================================================
@@ -112,8 +115,11 @@ mfxStatus WriteBitStreamFrame(mfxBitstream *pMfxBitstream, FILE *fSink);
 mfxStatus ReadBitStreamData(mfxBitstream *pBS, FILE *fSource);
 
 void ClearYUVSurfaceSysMem(mfxFrameSurface1 *pSfc, mfxU16 width, mfxU16 height);
+
+#if 0
 void ClearYUVSurfaceVMem(mfxMemId memId);
 void ClearRGBSurfaceVMem(mfxMemId memId);
+#endif
 
 // Get free raw frame surface
 int GetFreeSurfaceIndex(mfxFrameSurface1 **pSurfacesPool, mfxU16 nPoolSize);
@@ -127,11 +133,13 @@ typedef struct {
 // Get free task
 int GetFreeTaskIndex(Task *pTaskPool, mfxU16 nPoolSize);
 
+#ifdef __cplusplus
 // Initialize Intel Media SDK Session, device/display and memory manager
 mfxStatus Initialize(mfxIMPL impl, mfxVersion ver, MFXVideoSession *pSession,
 		     mfxFrameAllocator *pmfxAllocator,
 		     mfxHDL *deviceHandle = NULL,
 		     bool bCreateSharedHandles = false, bool dx9hack = false);
+#endif
 
 // Release resources (device/display)
 void Release();
@@ -143,3 +151,14 @@ void mfxGetTime(mfxTime *timestamp);
 
 //void mfxInitTime();  might need this for Windows
 double TimeDiffMsec(mfxTime tfinish, mfxTime tstart);
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+bool is_intel_gpu_primary();
+bool prefer_current_or_igpu_enc(int *iGPUIndex);
+bool is_windows8_or_greater();
+void util_cpuid(int cpuinfo[4], int level);
+#ifdef __cplusplus
+}
+#endif

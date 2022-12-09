@@ -9,6 +9,14 @@
 #include "common_directx9.h"
 #endif
 
+#include <intrin.h>
+#include <Windows.h>
+#include <VersionHelpers.h>
+#include <d3d11.h>
+#include <dxgi1_2.h>
+#include <intrin.h>
+#include <wrl/client.h>
+
 /* =======================================================
  * Windows implementation of OS-specific utility functions
  */
@@ -134,3 +142,167 @@ void ClearRGBSurfaceVMem(mfxMemId memId)
 #endif
 }
 #endif
+
+static HANDLE get_lib(const char *lib)
+{
+	HMODULE mod = GetModuleHandleA(lib);
+	if (mod)
+		return mod;
+
+	mod = LoadLibraryA(lib);
+	if (!mod)
+		blog(LOG_INFO, "Failed to load %s", lib);
+	return mod;
+}
+
+typedef HRESULT(WINAPI *CREATEDXGIFACTORY1PROC)(REFIID, void **);
+
+bool is_intel_gpu_primary()
+{
+	HMODULE dxgi = get_lib("DXGI.dll");
+	CREATEDXGIFACTORY1PROC create_dxgi;
+	IDXGIFactory1 *factory;
+	IDXGIAdapter *adapter;
+	DXGI_ADAPTER_DESC desc;
+	HRESULT hr;
+
+	if (!dxgi) {
+		return false;
+	}
+	create_dxgi = (CREATEDXGIFACTORY1PROC)GetProcAddress(
+		dxgi, "CreateDXGIFactory1");
+
+	if (!create_dxgi) {
+		blog(LOG_INFO, "Failed to load D3D11/DXGI procedures");
+		return false;
+	}
+
+	hr = create_dxgi(&IID_IDXGIFactory1, &factory);
+	if (FAILED(hr)) {
+		blog(LOG_INFO, "CreateDXGIFactory1 failed");
+		return false;
+	}
+
+	hr = factory->lpVtbl->EnumAdapters(factory, 0, &adapter);
+	factory->lpVtbl->Release(factory);
+	if (FAILED(hr)) {
+		blog(LOG_INFO, "EnumAdapters failed");
+		return false;
+	}
+
+	hr = adapter->lpVtbl->GetDesc(adapter, &desc);
+	adapter->lpVtbl->Release(adapter);
+	if (FAILED(hr)) {
+		blog(LOG_INFO, "GetDesc failed");
+		return false;
+	}
+
+	/*check whether adapter 0 is Intel*/
+	if (desc.VendorId == 0x8086) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+bool prefer_current_or_igpu_enc(int *iGPUIndex)
+{
+	IDXGIAdapter *pAdapter;
+	bool hasIGPU = false;
+	bool hasDGPU = false;
+	bool hasCurrent = false;
+
+	HMODULE hDXGI = LoadLibrary(L"dxgi.dll");
+	if (hDXGI == NULL) {
+		return false;
+	}
+
+	typedef HRESULT(WINAPI * LPCREATEDXGIFACTORY)(REFIID riid,
+						      void **ppFactory);
+
+	LPCREATEDXGIFACTORY pCreateDXGIFactory =
+		(LPCREATEDXGIFACTORY)GetProcAddress(hDXGI,
+						    "CreateDXGIFactory1");
+	if (pCreateDXGIFactory == NULL) {
+		pCreateDXGIFactory = (LPCREATEDXGIFACTORY)GetProcAddress(
+			hDXGI, "CreateDXGIFactory");
+
+		if (pCreateDXGIFactory == NULL) {
+			FreeLibrary(hDXGI);
+			return false;
+		}
+	}
+
+	IDXGIFactory *pFactory = NULL;
+	if (FAILED((*pCreateDXGIFactory)(__uuidof(IDXGIFactory),
+					 (void **)(&pFactory)))) {
+		FreeLibrary(hDXGI);
+		return false;
+	}
+
+	LUID luid;
+	bool hasLuid = false;
+	// obs_enter_graphics();
+	{
+		ID3D11Device *pDevice = (ID3D11Device *)gs_get_device_obj();
+		Microsoft::WRL::ComPtr<IDXGIDevice> dxgiDevice;
+		if (SUCCEEDED(pDevice->QueryInterface<IDXGIDevice>(
+			    dxgiDevice.GetAddressOf()))) {
+			Microsoft::WRL::ComPtr<IDXGIAdapter> dxgiAdapter;
+			if (SUCCEEDED(dxgiDevice->GetAdapter(
+				    dxgiAdapter.GetAddressOf()))) {
+				DXGI_ADAPTER_DESC desc;
+				hasLuid =
+					SUCCEEDED(dxgiAdapter->GetDesc(&desc));
+				if (hasLuid) {
+					luid = desc.AdapterLuid;
+				}
+			}
+		}
+	}
+	// obs_leave_graphics();
+
+	// Check for i+I cases (Intel discrete + Intel integrated graphics on the same system). Default will be integrated.
+	for (int adapterIndex = 0;
+	     SUCCEEDED(pFactory->EnumAdapters(adapterIndex, &pAdapter));
+	     ++adapterIndex) {
+		DXGI_ADAPTER_DESC AdapterDesc = {};
+		const HRESULT hr = pAdapter->GetDesc(&AdapterDesc);
+		pAdapter->Release();
+
+		if (SUCCEEDED(hr) && (AdapterDesc.VendorId == 0x8086)) {
+			if (hasLuid &&
+			    (AdapterDesc.AdapterLuid.LowPart == luid.LowPart) &&
+			    (AdapterDesc.AdapterLuid.HighPart ==
+			     luid.HighPart)) {
+				hasCurrent = true;
+				*iGPUIndex = adapterIndex;
+				break;
+			}
+
+			if (AdapterDesc.DedicatedVideoMemory <=
+			    512 * 1024 * 1024) {
+				hasIGPU = true;
+				if (iGPUIndex != NULL) {
+					*iGPUIndex = adapterIndex;
+				}
+			} else {
+				hasDGPU = true;
+			}
+		}
+	}
+
+	pFactory->Release();
+	FreeLibrary(hDXGI);
+
+	return hasCurrent || (hasIGPU && hasDGPU);
+}
+
+bool is_windows8_or_greater()
+{
+	return IsWindows8OrGreater();
+}
+
+void util_cpuid(int cpuinfo[4], int level) {
+	__cpuid(level, cpuinfo);
+}
