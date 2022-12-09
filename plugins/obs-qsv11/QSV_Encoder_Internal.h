@@ -133,6 +133,7 @@ private:
 	bool m_bUseD3D11;
 	bool m_bD3D9HACK;
 	bool m_isDGPU;
+	bool m_bUseAlloc;
 	static mfxU16 g_numEncodersOpen;
 	static mfxHDL
 		g_DX_Handle; // we only want one handle for all instances to use;
