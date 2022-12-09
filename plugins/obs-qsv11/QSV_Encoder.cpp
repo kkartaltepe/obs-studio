@@ -59,13 +59,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "QSV_Encoder.h"
 #include "QSV_Encoder_Internal.h"
+#include "platform/common_utils.h"
 #include <obs-module.h>
 #include <string>
 #include <atomic>
-#include <intrin.h>
-#include <d3d11.h>
-#include <dxgi1_2.h>
-#include <wrl/client.h>
 
 #define do_log(level, format, ...) \
 	blog(level, "[qsv encoder: '%s'] " format, "msdk_impl", ##__VA_ARGS__)
@@ -82,7 +79,8 @@ void qsv_encoder_version(unsigned short *major, unsigned short *minor)
 
 qsv_t *qsv_encoder_open(qsv_param_t *pParams, enum qsv_codec codec)
 {
-	mfxIMPL impl_list[4] = {MFX_IMPL_HARDWARE, MFX_IMPL_HARDWARE2,
+#define MAX_GPUS 4
+	mfxIMPL impl_list[MAX_GPUS] = {MFX_IMPL_HARDWARE, MFX_IMPL_HARDWARE2,
 				MFX_IMPL_HARDWARE3, MFX_IMPL_HARDWARE4};
 
 	obs_video_info ovi;
@@ -91,20 +89,21 @@ qsv_t *qsv_encoder_open(qsv_param_t *pParams, enum qsv_codec codec)
 
 	// Select current adapter - will be iGPU if exists due to adapter reordering
 	if (codec == QSV_CODEC_AV1 && !adapters[adapter_idx].supports_av1) {
-		for (size_t i = 0; i < 4; i++) {
+		for (size_t i = 0; i < MAX_GPUS; i++) {
 			if (adapters[i].supports_av1) {
 				adapter_idx = i;
 				break;
 			}
 		}
 	} else if (!adapters[adapter_idx].is_intel) {
-		for (size_t i = 0; i < 4; i++) {
+		for (size_t i = 0; i < MAX_GPUS; i++) {
 			if (adapters[i].is_intel) {
 				adapter_idx = i;
 				break;
 			}
 		}
 	}
+#undef MAX_GPUS
 
 	bool isDGPU = adapters[adapter_idx].is_dgpu;
 	impl = impl_list[adapter_idx];
@@ -295,7 +294,7 @@ enum qsv_cpu_platform qsv_get_cpu_platform()
 	using std::string;
 
 	int cpuInfo[4];
-	__cpuid(cpuInfo, 0);
+	util_cpuid(cpuInfo, 0);
 
 	string vendor;
 	vendor += string((char *)&cpuInfo[1], 4);
@@ -305,9 +304,9 @@ enum qsv_cpu_platform qsv_get_cpu_platform()
 	if (vendor != "GenuineIntel")
 		return QSV_CPU_PLATFORM_UNKNOWN;
 
-	__cpuid(cpuInfo, 1);
-	BYTE model = ((cpuInfo[0] >> 4) & 0xF) + ((cpuInfo[0] >> 12) & 0xF0);
-	BYTE family = ((cpuInfo[0] >> 8) & 0xF) + ((cpuInfo[0] >> 20) & 0xFF);
+	util_cpuid(cpuInfo, 1);
+	uint8_t model = ((cpuInfo[0] >> 4) & 0xF) + ((cpuInfo[0] >> 12) & 0xF0);
+	uint8_t family = ((cpuInfo[0] >> 8) & 0xF) + ((cpuInfo[0] >> 20) & 0xFF);
 
 	// See Intel 64 and IA-32 Architectures Software Developer's Manual,
 	// Vol 3C Table 35-1

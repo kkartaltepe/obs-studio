@@ -64,7 +64,7 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("obs-qsv11", "en-US")
 MODULE_EXPORT const char *obs_module_description(void)
 {
-	return "Intel Quick Sync Video support for Windows";
+	return "Intel Quick Sync Video encoder support";
 }
 
 extern struct obs_encoder_info obs_qsv_encoder;
@@ -83,6 +83,7 @@ size_t adapter_count = 0;
 
 bool obs_module_load(void)
 {
+#if defined(_WIN32)
 	char *test_exe = os_get_executable_path_ptr("obs-qsv-test.exe");
 	struct dstr caps_str = {0};
 	os_process_pipe_t *pp = NULL;
@@ -147,6 +148,18 @@ bool obs_module_load(void)
 		av1_supported |= adapter->supports_av1;
 		hevc_supported |= adapter->supports_hevc;
 	}
+#else
+	// We could lift the vaapi query here.
+	adapter_count = 1;
+	struct adapter_info *adapter = &adapters[0];
+	adapter->is_intel = true;
+	adapter->is_dgpu = true;
+	adapter->supports_av1 = true;
+	adapter->supports_hevc = true;
+	bool avc_supported = true;
+	bool hevc_supported = true;
+	bool av1_supported = true;
+#endif
 
 	if (avc_supported) {
 		obs_register_encoder(&obs_qsv_encoder_tex_v2);
@@ -166,10 +179,12 @@ bool obs_module_load(void)
 #endif
 
 fail:
+#if defined(_WIN32)
 	config_close(config);
 	dstr_free(&caps_str);
 	os_process_pipe_destroy(pp);
 	bfree(test_exe);
+#endif
 
 	return true;
 }

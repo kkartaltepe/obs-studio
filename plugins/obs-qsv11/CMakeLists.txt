@@ -30,10 +30,10 @@ target_link_libraries(
 
 
 if(OS_WINDOWS)
-  add_subdirectory(obs-qsv-test)
-
   add_library(libmfx INTERFACE)
   add_library(OBS::libmfx ALIAS libmfx)
+
+  add_subdirectory(obs-qsv-test)
 
   target_sources(
     libmfx
@@ -121,6 +121,14 @@ if(OS_WINDOWS)
   target_compile_definitions(
     obs-qsv11 PRIVATE UNICODE _UNICODE _CRT_SECURE_NO_WARNINGS
                       _CRT_NONSTDC_NO_WARNINGS DX11_D3D)
+elseif(OS_LINUX)
+  find_package(Mfx REQUIRED)
+
+  target_sources(obs-qsv11 PRIVATE
+          platform/common_utils_linux.cpp)
+
+  target_link_libraries(obs-qsv11
+    PRIVATE MFX::MFX)
 endif()
 
 set_target_properties(obs-qsv11 PROPERTIES FOLDER "plugins/obs-qsv11")
