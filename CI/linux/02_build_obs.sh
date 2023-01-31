@@ -53,6 +53,10 @@ _configure_obs() {
         PIPEWIRE_OPTION="-DENABLE_PIPEWIRE=OFF"
     fi
 
+    if [ "${DISABLE_QSV}" ]; then
+        QSV_OPTION="-DENABLE_QSV11=OFF"
+    fi
+
     cmake -S . -B ${BUILD_DIR} -G Ninja \
         -DCEF_ROOT_DIR="${DEPS_BUILD_DIR}/cef_binary_${LINUX_CEF_BUILD_VERSION:-${CI_LINUX_CEF_VERSION}}_linux64" \
         -DCMAKE_BUILD_TYPE=${BUILD_CONFIG} \
@@ -60,6 +64,7 @@ _configure_obs() {
         -DENABLE_AJA=OFF \
         -DENABLE_NEW_MPEGTS_OUTPUT=OFF \
         ${PIPEWIRE_OPTION} \
+        ${QSV_OPTION} \
         ${YOUTUBE_OPTIONS} \
         ${TWITCH_OPTIONS} \
         ${RESTREAM_OPTIONS} \
@@ -115,6 +120,7 @@ build-obs-main() {
                 -v | --verbose ) export VERBOSE=TRUE; shift ;;
                 -p | --portable ) export PORTABLE=TRUE; shift ;;
                 --disable-pipewire ) DISABLE_PIPEWIRE=TRUE; shift ;;
+                --disable-qsv ) DISABLE_QSV=TRUE; shift ;;
                 --build-dir ) BUILD_DIR="${2}"; shift 2 ;;
                 -- ) shift; break ;;
                 * ) break ;;

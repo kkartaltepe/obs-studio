@@ -258,7 +258,7 @@ jobs:
         run: CI/linux/01_install_dependencies.sh --disable-pipewire
 
       - name: 'Build OBS'
-        run: CI/linux/02_build_obs.sh --disable-pipewire
+        run: CI/linux/02_build_obs.sh --disable-pipewire --disable-qsv
 
       - name: 'Run tests'
         if: success()

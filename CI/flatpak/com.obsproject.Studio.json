@@ -447,7 +447,8 @@
         "-DENABLE_JACK=ON",
         "-DENABLE_RTMPS=ON",
         "-DENABLE_VLC=OFF",
-        "-DENABLE_AJA=ON"
+        "-DENABLE_AJA=ON",
+        "-DENABLE_QSV11=OFF"
       ],
       "secret-opts": [
         "-DRESTREAM_CLIENTID=$RESTREAM_CLIENTID",
