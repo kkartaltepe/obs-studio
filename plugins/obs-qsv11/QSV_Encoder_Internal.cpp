@@ -66,7 +66,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define info(format, ...) do_log(LOG_INFO, format, ##__VA_ARGS__)
 #define debug(format, ...) do_log(LOG_DEBUG, format, ##__VA_ARGS__)
 
-mfxHDL QSV_Encoder_Internal::g_DX_Handle = NULL;
+mfxHDL QSV_Encoder_Internal::g_GFX_Handle = NULL;
 mfxU16 QSV_Encoder_Internal::g_numEncodersOpen = 0;
 
 QSV_Encoder_Internal::QSV_Encoder_Internal(mfxIMPL &impl, mfxVersion &version,
@@ -93,7 +93,7 @@ QSV_Encoder_Internal::QSV_Encoder_Internal(mfxIMPL &impl, mfxVersion &version,
 	tempImpl = impl | MFX_IMPL_VIA_D3D11;
 	const char *sImpl = "D3D11";
 #else
-	m_bUseTexAlloc = false;
+	m_bUseTexAlloc = true;
 	tempImpl = impl | MFX_IMPL_VIA_VAAPI;
 	const char *sImpl = "VAAPI";
 #endif
@@ -144,15 +144,19 @@ mfxStatus QSV_Encoder_Internal::Open(qsv_param_t *pParams, enum qsv_codec codec)
 	if (m_bUseD3D11)
 		// Use D3D11 surface
 		sts = Initialize(m_impl, m_ver, &m_session, &m_mfxAllocator,
-				 &g_DX_Handle, false, false);
+				 &g_GFX_Handle, false, false);
 	else if (m_bD3D9HACK)
 		// Use hack
 		sts = Initialize(m_impl, m_ver, &m_session, &m_mfxAllocator,
-				 &g_DX_Handle, false, true);
+				 &g_GFX_Handle, false, true);
 	else
-		sts = Initialize(m_impl, m_ver, &m_session, NULL);
+		sts = Initialize(m_impl, m_ver, &m_session, nullptr);
 #else
-	sts = Initialize(m_impl, m_ver, &m_session, NULL, NULL, false, false);
+	if(m_bUseTexAlloc) {
+		sts = Initialize(m_impl, m_ver, &m_session, &m_mfxAllocator, &g_GFX_Handle, false, false);
+	} else {
+		sts = Initialize(m_impl, m_ver, &m_session, nullptr, nullptr, false, false);
+	}
 #endif
 
 	MSDK_CHECK_RESULT(sts, MFX_ERR_NONE, sts);
@@ -920,7 +924,7 @@ mfxStatus QSV_Encoder_Internal::ClearData()
 
 	if ((m_bUseTexAlloc) && (g_numEncodersOpen <= 0)) {
 		Release();
-		g_DX_Handle = NULL;
+		g_GFX_Handle = NULL;
 	}
 	m_session.Close();
 	return sts;

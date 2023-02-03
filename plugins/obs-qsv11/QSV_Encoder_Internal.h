@@ -134,5 +134,5 @@ private:
 	bool m_isDGPU;
 	static mfxU16 g_numEncodersOpen;
 	static mfxHDL
-		g_DX_Handle; // we only want one handle for all instances to use;
+		g_GFX_Handle; // we only want one handle for all instances to use;
 };
