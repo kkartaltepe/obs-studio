@@ -104,10 +104,12 @@ if(OS_WINDOWS)
                       _CRT_NONSTDC_NO_WARNINGS)
 elseif(OS_LINUX)
   find_package(Mfx REQUIRED)
+  find_package(Libva REQUIRED)
 
   target_sources(obs-qsv11 PRIVATE common_utils_linux.cpp)
 
-  target_link_libraries(obs-qsv11 PRIVATE MFX::MFX)
+  target_link_libraries(obs-qsv11
+	  PRIVATE MFX::MFX Libva::va Libva::drm)
 endif()
 
 set_target_properties(obs-qsv11 PROPERTIES FOLDER "plugins/obs-qsv11")
