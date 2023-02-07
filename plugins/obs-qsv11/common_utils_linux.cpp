@@ -1,20 +1,37 @@
 #include "common_utils.h"
 #include <time.h>
 #include <cpuid.h>
-#include <util/c99defs.h>
-#include <util/bmem.h>
 #include <fcntl.h>
 #include <va/va.h>
 #include <va/va_drm.h>
 #include <va/va_drmcommon.h>
 
+#include <obs.h>
+#include <obs-encoder.h> // a fucking mess we cannot include by itself.
+#include <graphics/graphics.h>
+#include <util/c99defs.h>
+#include <util/bmem.h>
+
 #define DEVICE_MGR_TYPE MFX_HANDLE_VA_DISPLAY
+
+struct surface_info {
+	VASurfaceID id;
+	int32_t width, height;
+	gs_texture_t *tex_y;
+	gs_texture_t *tex_uv;
+};
 
 mfxStatus simple_alloc(mfxHDL pthis, mfxFrameAllocRequest *request,
 		       mfxFrameAllocResponse *response)
 {
-	if (request->Type & MFX_MEMTYPE_SYSTEM_MEMORY)
+	if (request->Type &
+	    (MFX_MEMTYPE_SYSTEM_MEMORY |
+	     // MFX_MEMTYPE_VIDEO_MEMORY_DECODER_TARGET | // but why is this allocated?
+	     MFX_MEMTYPE_VIDEO_MEMORY_PROCESSOR_TARGET))
 		return MFX_ERR_UNSUPPORTED;
+
+	response->mids = (mfxMemId *)nullptr;
+	response->NumFrameActual = 0;
 
 	MFXVideoSession *session = (MFXVideoSession *)pthis;
 	VADisplay display;
@@ -26,42 +43,28 @@ mfxStatus simple_alloc(mfxHDL pthis, mfxFrameAllocRequest *request,
 	unsigned int rt_format;
 	int32_t pix_format;
 	switch (request->Info.FourCC) {
-	case MFX_FOURCC_NV12:
-		rt_format = VA_RT_FORMAT_YUV420;
-		pix_format = VA_FOURCC_NV12;
-		break;
-		/*
-		 * These end up not really having valid surface formats in va-api
-	case MFX_FOURCC_RGB4:
-		rt_format = VA_RT_FORMAT_RGB32;
-		pix_format = VA_FOURCC_RGBX;
-		break;
-	case MFX_FOURCC_YUY2:
-		rt_format = VA_RT_FORMAT_YUV422;
-		pix_format = VA_FOURCC_YUY2;
-		break;
-	case MFX_FOURCC_P8:
-		rt_format = VA_RT_FORMAT_YUV400;
-		pix_format = VA_FOURCC_Y8;
-		break;
-		*/
 	case MFX_FOURCC_P010:
 		rt_format = VA_RT_FORMAT_YUV420_10;
 		pix_format = VA_FOURCC_P010;
+		break;
+	case MFX_FOURCC_NV12:
+	default:
+		rt_format = VA_RT_FORMAT_YUV420;
+		pix_format = VA_FOURCC_NV12;
 		break;
 	}
 
 	int num_attrs = 2;
 	VASurfaceAttrib attrs[2] = {
 		{
-			.type = VASurfaceAttribMemoryType, // maybe not supported on old drivers? We need to map these with libdrm.
+			.type = VASurfaceAttribMemoryType, // maybe not supported on old drivers? We need PRIME 2 for importing these as opengl surfaces.
 			.flags = VA_SURFACE_ATTRIB_SETTABLE,
 			.value =
 				{
 					.type = VAGenericValueTypeInteger,
 					.value =
-						{.i = VA_SURFACE_ATTRIB_MEM_TYPE_VA |
-						      VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2},
+						{.i = // VA_SURFACE_ATTRIB_MEM_TYPE_VA |
+						 VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2},
 				},
 		},
 		{
@@ -75,30 +78,87 @@ mfxStatus simple_alloc(mfxHDL pthis, mfxFrameAllocRequest *request,
 		}};
 
 	unsigned int num_surfaces = request->NumFrameSuggested;
-	VASurfaceID *surfaces =
-		(VASurfaceID *)bmalloc(sizeof(mfxMemId) * num_surfaces);
-	if (vaCreateSurfaces(display, rt_format, request->Info.Width,
-			     request->Info.Height, surfaces, num_surfaces,
-			     attrs, num_attrs) != VA_STATUS_SUCCESS)
+	VASurfaceID temp_surfaces[64] = {0};
+	// assert(num_surfaces < 64);
+	VAStatus vasts;
+	if ((vasts = vaCreateSurfaces(display, rt_format, request->Info.Width,
+				      request->Info.Height, temp_surfaces,
+				      num_surfaces, attrs, num_attrs)) !=
+	    VA_STATUS_SUCCESS) {
+		blog(LOG_ERROR, "failed to create surfaces: %d", vasts);
 		return MFX_ERR_MEMORY_ALLOC;
+	}
 
-	if (sizeof(VASurfaceID) < sizeof(mfxMemId)) {
-		for (int i = num_surfaces; i > 1; i--) {
-			// Weird casts since surfaces are 32bit and we are storing into a void *.
-			((mfxMemId *)surfaces)[i] =
-				(mfxMemId)(uintptr_t)surfaces[i];
+	// Follow the ffmpeg trick and stuff our pointer at the end.
+	mfxMemId *mids =
+		(mfxMemId *)bmalloc(sizeof(mfxMemId) * num_surfaces + 1);
+	struct surface_info *surfaces = (struct surface_info *)bmalloc(
+		sizeof(struct surface_info) * num_surfaces);
+
+	mids[num_surfaces] = surfaces; // stuff it
+	for (uint64_t i = 0; i < num_surfaces; i++) {
+		surfaces[i].id = temp_surfaces[i];
+		surfaces[i].width = request->Info.Width;
+		surfaces[i].height = request->Info.Height;
+		mids[i] = &surfaces[i];
+
+		VADRMPRIMESurfaceDescriptor surfDesc = {0};
+		if (vaExportSurfaceHandle(
+			    display, surfaces[i].id,
+			    VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
+			    VA_EXPORT_SURFACE_READ_WRITE, // try and avoid binding surface from orphaning.
+			    &surfDesc) != VA_STATUS_SUCCESS)
+			return MFX_ERR_MEMORY_ALLOC;
+
+		obs_enter_graphics();
+		// TODO: P010 format handling.
+		// TODO: Verify its one FD
+		assert(surfDesc.num_objects == 1);
+		int fds[4] = {0};
+		uint32_t strides[4] = {0};
+		uint32_t offsets[4] = {0};
+		uint64_t modifiers[4] = {0};
+		fds[0] =
+			surfDesc.objects[surfDesc.layers[0].object_index[0]].fd;
+		fds[1] =
+			surfDesc.objects[surfDesc.layers[1].object_index[0]].fd;
+		strides[0] = surfDesc.layers[0].pitch[0];
+		strides[1] = surfDesc.layers[1].pitch[0];
+		offsets[0] = surfDesc.layers[0].offset[0];
+		offsets[1] = surfDesc.layers[1].offset[0];
+		modifiers[0] =
+			surfDesc.objects[surfDesc.layers[0].object_index[0]]
+				.drm_format_modifier;
+		modifiers[1] =
+			surfDesc.objects[surfDesc.layers[1].object_index[0]]
+				.drm_format_modifier;
+
+		surfaces[i].tex_y = gs_texture_create_from_dmabuf(
+			surfDesc.width, surfDesc.height,
+			surfDesc.layers[0].drm_format, GS_R8, 1, fds, strides,
+			offsets, modifiers);
+		surfaces[i].tex_uv = gs_texture_create_from_dmabuf(
+			surfDesc.width/2, surfDesc.height,
+			surfDesc.layers[1].drm_format, GS_R8G8, 1,
+			fds+1, strides+1, offsets+1, modifiers+1);
+		obs_leave_graphics();
+
+		close(surfDesc.objects[surfDesc.layers[0].object_index[0]].fd);
+		if (!surfaces[i].tex_y || !surfaces[i].tex_uv) {
+			return MFX_ERR_MEMORY_ALLOC;
 		}
 	}
 
-	response->mids = (mfxMemId *)surfaces;
-	response->NumFrameActual = request->NumFrameSuggested;
-	return sts;
+	response->mids = (mfxMemId *)mids;
+	response->NumFrameActual = num_surfaces;
+	return MFX_ERR_NONE;
 }
 mfxStatus simple_lock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
 {
 	UNUSED_PARAMETER(pthis);
 	UNUSED_PARAMETER(mid);
 	UNUSED_PARAMETER(ptr);
+
 	return MFX_ERR_UNSUPPORTED;
 }
 mfxStatus simple_unlock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
@@ -111,114 +171,80 @@ mfxStatus simple_unlock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
 mfxStatus simple_gethdl(mfxHDL pthis, mfxMemId mid, mfxHDL *handle)
 {
 	UNUSED_PARAMETER(pthis);
-	*handle = (mfxHDL)mid;
+	if (NULL == handle)
+		return MFX_ERR_INVALID_HANDLE;
+
+	// Intel didn't see fit to document what a handle was, big surprise that
+	// all working implementations are authored by intel engineers.
+	// Pair format defined by oneVPL-intel-gpu-intel-onevpl-23.1.0/_studio/mfx_lib/encode_hw/av1/linux/base/av1ehw_base_va_packer_lin.cpp
+	mfxHDLPair *pPair = (mfxHDLPair *)handle;
+
+	// Pointer to a VASurfaceID, will be dereferenced by the driver.
+	pPair->first = &((struct surface_info *)mid)->id;
+	pPair->second = 0;
+
 	return MFX_ERR_NONE;
 }
 mfxStatus simple_free(mfxHDL pthis, mfxFrameAllocResponse *response)
 {
+	if (response->mids == nullptr || response->NumFrameActual == 0)
+		return MFX_ERR_NONE;
+
 	MFXVideoSession *session = (MFXVideoSession *)pthis;
 	VADisplay display;
 	mfxStatus sts = session->GetHandle(DEVICE_MGR_TYPE, &display);
 	MSDK_CHECK_RESULT(sts, MFX_ERR_NONE, sts);
 
-	if (vaDestroySurfaces(display, (VASurfaceID *)response->mids,
+	struct surface_info *surfs =
+		(struct surface_info *)response->mids[response->NumFrameActual];
+	VASurfaceID temp_surfaces[64] = {0};
+	obs_enter_graphics();
+	for (int i = 0; i < response->NumFrameActual; i++) {
+		temp_surfaces[i] = *(VASurfaceID *)response->mids[i];
+		gs_texture_destroy(surfs[i].tex_y);
+		gs_texture_destroy(surfs[i].tex_uv);
+	}
+	obs_leave_graphics();
+
+	bfree(surfs);
+	bfree(response->mids);
+	if (vaDestroySurfaces(display, temp_surfaces,
 			      response->NumFrameActual) != VA_STATUS_SUCCESS)
 		return MFX_ERR_MEMORY_ALLOC;
-	bfree(response->mids);
 
 	return MFX_ERR_NONE;
 }
 
-mfxStatus simple_copytex(mfxHDL pthis, mfxMemId mid, mfxU32 tex_handle,
-			 mfxU64 lock_key, mfxU64 *next_key)
+mfxStatus simple_copytex(mfxHDL pthis, mfxMemId mid, void *tex, mfxU64 lock_key,
+			 mfxU64 *next_key)
 {
 	UNUSED_PARAMETER(pthis);
 	UNUSED_PARAMETER(mid);
-	UNUSED_PARAMETER(tex_handle);
+	UNUSED_PARAMETER(tex);
 	UNUSED_PARAMETER(lock_key);
 	UNUSED_PARAMETER(next_key);
 
+	profile_start("copy_tex");
 
 	MFXVideoSession *session = (MFXVideoSession *)pthis;
 	VADisplay display;
 	mfxStatus sts = session->GetHandle(DEVICE_MGR_TYPE, &display);
 	MSDK_CHECK_RESULT(sts, MFX_ERR_NONE, sts);
 
-	/* LOL unsupported on intel, of course.
+	struct encoder_texture *ptex = (struct encoder_texture *)tex;
+	struct surface_info *surf = (struct surface_info *)mid;
+	struct vec4 clear_color;
 
-	// Get the mid DRM buffer and va blit into it from tex_handle dma-buf.
-	VADRMPRIMESurfaceDescriptor surfDesc = {
-		.fourcc = VA_FOURCC_NV12, // P010?
-		.width = width,
-		.height = height,
-		.num_objects = 2, // combined planes? Not possible on opengl (or vulkan?)
-		.objects = {{.fd = XXX, .size = 0, .drm_format_modifier = XXX},
-			    {.fd = XXX, .size = 0, .drm_format_modifier = XXX}},
-		.num_layers = 2, // 1 for combined planes.
-		.layers = {
-			{.drm_format = XXX,
-			 .num_planes = 1,
-			 .object_index = {0},
-			 .offset = {XXX},
-			 .pitch = {XXX}},
-			{.drm_format = XXX,
-			 .num_planes = 1,
-			 .object_index = {0},
-			 .offset = {XXX},
-			 .pitch = {XXX}},
-		};
+	obs_enter_graphics();
+	// Extreme danger, executing this where the any plane
+	// has silently failed to import will crash/stall the gpu and
+	// result in extreme sadness.
+	gs_copy_texture(surf->tex_y, ptex->tex[0]);
+	gs_copy_texture(surf->tex_uv, ptex->tex[1]);
+	gs_flush();
+	obs_leave_graphics();
 
-	int num_attrs = 2;
-	VASurfaceAttrib attrs[2] = {
-		{
-			.type = VASurfaceAttribMemoryType, // maybe not supported on old drivers? We need to map these with libdrm.
-			.flags = VA_SURFACE_ATTRIB_SETTABLE,
-			.value =
-				{
-					.type = VAGenericValueTypeInteger,
-					.value =
-						{.i = VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2},
-				},
-		},
-		{
-			.type = VASurfaceAttribExternalBufferDescriptor,
-			.flags = VA_SURFACE_ATTRIB_SETTABLE,
-			.value =
-				{
-					.type = VAGenericValueTypePointer,
-					.value = {.p = &surfDesc},
-				},
-		}};
-
-	unsigned int num_surfaces = 1;
-	VASurfaceID surface;
-	if (vaCreateSurfaces(display, rt_format, width, height, &surface,
-			     num_surfaces, attrs,
-			     num_attrs) != VA_STATUS_SUCCESS)
-		return MFX_ERR_MEMORY_ALLOC;
-
-	VAImage tex_image;
-	if(vaDeriveImage(display, surface, &tex_image) != VA_STATUS_SUCCESS) {
-		vaDestroySurfaces(display, &surface, num_surfaces);
-		return MFX_ERR_MEMORY_ALLOC;
-	}
-
-	// I hope this is fast... Also no cross texture format support so much sadness if the source isnt nv12.
-	// https://github.com/intel/media-driver/issues/401
-	vaPutImage(display, va_surf, tex_image, 0, 0, width, height, 0, 0,
-		   width, height);
-	vaDestroyImage(display, tex_image);
-	vaDestroySurfaces(display, &surface, num_surfaces);
-	*/
-
-	VADRMPRIMESurfaceDescriptor surfDesc = {0};
-	VASurfaceID va_surf = (VASurfaceID)(uintptr_t)mid; // reverse weird casts.
-	if (vaExportSurfaceHandle(display, va_surf,
-				  VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2,
-				  VA_EXPORT_SURFACE_WRITE_ONLY,
-				  &surfDesc) != VA_STATUS_SUCCESS)
-		return MFX_ERR_UNSUPPORTED;
-
+	profile_end("copy_tex");
 	return MFX_ERR_NONE;
 }
 
@@ -248,16 +274,16 @@ mfxStatus Initialize(mfxIMPL impl, mfxVersion ver, MFXVideoSession *pSession,
 			impl = MFX_IMPL_BASETYPE(impl);
 			switch (impl) {
 			case MFX_IMPL_HARDWARE:
-				implDRM = "/dev/dri/card0";
+				implDRM = "/dev/dri/renderD128";
 				break;
 			case MFX_IMPL_HARDWARE2:
-				implDRM = "/dev/dri/card1";
+				implDRM = "/dev/dri/renderD129";
 				break;
 			case MFX_IMPL_HARDWARE3:
-				implDRM = "/dev/dri/card2";
+				implDRM = "/dev/dri/renderD130";
 				break;
 			case MFX_IMPL_HARDWARE4:
-				implDRM = "/dev/dri/card3";
+				implDRM = "/dev/dri/renderD131";
 				break;
 			default:
 				sts = MFX_ERR_DEVICE_FAILED;
@@ -280,7 +306,7 @@ mfxStatus Initialize(mfxIMPL impl, mfxVersion ver, MFXVideoSession *pSession,
 		MSDK_CHECK_RESULT(sts, MFX_ERR_NONE, sts);
 
 		pmfxAllocator->pthis =
-			*pSession; // We use Media SDK session ID as the allocation identifier
+			pSession; // We use Media SDK session ID as the allocation identifier
 		pmfxAllocator->Alloc = simple_alloc;
 		pmfxAllocator->Free = simple_free;
 		pmfxAllocator->Lock = simple_lock;

@@ -73,7 +73,7 @@ public:
 	mfxStatus Encode(uint64_t ts, uint8_t *pDataY, uint8_t *pDataUV,
 			 uint32_t strideY, uint32_t strideUV,
 			 mfxBitstream **pBS);
-	mfxStatus Encode_tex(uint64_t ts, uint32_t tex_handle,
+	mfxStatus Encode_tex(uint64_t ts, void *tex,
 			     uint64_t lock_key, uint64_t *next_key,
 			     mfxBitstream **pBS);
 	mfxStatus ClearData();

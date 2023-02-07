@@ -802,7 +802,7 @@ mfxStatus QSV_Encoder_Internal::Encode(uint64_t ts, uint8_t *pDataY,
 	return sts;
 }
 
-mfxStatus QSV_Encoder_Internal::Encode_tex(uint64_t ts, uint32_t tex_handle,
+mfxStatus QSV_Encoder_Internal::Encode_tex(uint64_t ts, void *tex,
 					   uint64_t lock_key,
 					   uint64_t *next_key,
 					   mfxBitstream **pBS)
@@ -839,7 +839,7 @@ mfxStatus QSV_Encoder_Internal::Encode_tex(uint64_t ts, uint32_t tex_handle,
 	if (m_bUseTexAlloc) {
 		// mfxU64 isnt well defined in the SDK, requiring a manual cast from uint64_t.
 		sts = simple_copytex(m_mfxAllocator.pthis, pSurface->Data.MemId,
-				     tex_handle, lock_key, (mfxU64 *)next_key);
+				     tex, lock_key, (mfxU64 *)next_key);
 		MSDK_CHECK_RESULT(sts, MFX_ERR_NONE, sts);
 	}
 
