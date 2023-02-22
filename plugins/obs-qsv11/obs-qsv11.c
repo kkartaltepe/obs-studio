@@ -65,6 +65,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <obs-avc.h>
 
 #include "QSV_Encoder.h"
+#include "common_utils.h"
 
 #define do_log(level, format, ...)                 \
 	blog(level, "[qsv encoder: '%s'] " format, \
