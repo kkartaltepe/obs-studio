@@ -252,9 +252,9 @@ struct obs_core_video_mix {
 	gs_stagesurf_t *active_copy_surfaces[NUM_TEXTURES][NUM_CHANNELS];
 	gs_stagesurf_t *copy_surfaces[NUM_TEXTURES][NUM_CHANNELS];
 	gs_texture_t *convert_textures[NUM_CHANNELS];
+	gs_texture_t *convert_textures_encode[NUM_CHANNELS];
 #ifdef _WIN32
 	gs_stagesurf_t *copy_surfaces_encode[NUM_TEXTURES];
-	gs_texture_t *convert_textures_encode[NUM_CHANNELS];
 #endif
 	gs_texture_t *render_texture;
 	gs_texture_t *output_texture;
@@ -1215,6 +1215,9 @@ extern struct obs_encoder_info *find_encoder(const char *id);
 
 extern bool obs_encoder_initialize(obs_encoder_t *encoder);
 extern void obs_encoder_shutdown(obs_encoder_t *encoder);
+
+extern void obs_encoder_get_video_info(struct obs_encoder *encoder,
+				       struct video_scale_info *info);
 
 extern void obs_encoder_start(obs_encoder_t *encoder,
 			      void (*new_packet)(void *param,

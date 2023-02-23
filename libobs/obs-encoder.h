@@ -29,6 +29,9 @@
 extern "C" {
 #endif
 
+struct obs_encoder;
+typedef struct obs_encoder obs_encoder_t;
+
 #define OBS_ENCODER_CAP_DEPRECATED (1 << 0)
 #define OBS_ENCODER_CAP_PASS_TEXTURE (1 << 1)
 #define OBS_ENCODER_CAP_DYN_BITRATE (1 << 2)
@@ -100,6 +103,18 @@ struct encoder_frame {
 
 	/** Presentation timestamp */
 	int64_t pts;
+};
+
+struct gs_texture;
+
+/** Encoder input texture */
+struct encoder_texture {
+	/** Texture format and size */
+	struct video_scale_info info;
+	/** Shared texture handle, only set on Windows */
+	uint32_t handle;
+	/** Textures, NULL-terminated */
+	struct gs_texture *tex[5];
 };
 
 /**
@@ -262,6 +277,27 @@ struct obs_encoder_info {
 			       uint64_t lock_key, uint64_t *next_key,
 			       struct encoder_packet *packet,
 			       bool *received_packet);
+
+	/**
+	 * Returns whether texture encoding is available for this video format
+	 *
+	 * Has no effect if caps does not contain OBS_ENCODER_CAP_PASS_TEXTURE.
+	 * If this function is not defined, it is assumed that only textures in
+	 * NV12 format are supported.
+	 *
+	 * @param          data  Data associated with this encoder context
+	 * @param[in]      info  Video format information
+	 * @return               Whether the encoder supports texture encoding
+	 *                       with this video format
+	 */
+	bool (*encode_texture_available)(void *data,
+					 const struct video_scale_info *info);
+
+	bool (*encode_texture2)(void *data, struct encoder_texture *texture,
+				int64_t pts, uint64_t lock_key,
+				uint64_t *next_key,
+				struct encoder_packet *packet,
+				bool *received_packet);
 };
 
 EXPORT void obs_register_encoder_s(const struct obs_encoder_info *info,
