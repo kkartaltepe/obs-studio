@@ -271,13 +271,17 @@ void video_output_close(video_t *video)
 
 	video_output_stop(video);
 
+	pthread_mutex_lock(&video->input_mutex);
 	for (size_t i = 0; i < video->inputs.num; i++)
 		video_input_free(&video->inputs.array[i]);
 	da_free(video->inputs);
 
 	for (size_t i = 0; i < video->info.cache_size; i++)
 		video_frame_free((struct video_frame *)&video->cache[i]);
+	pthread_mutex_unlock(&video->input_mutex);
 
+	pthread_mutex_destroy(&video->input_mutex);
+	pthread_mutex_destroy(&video->data_mutex);
 	bfree(video);
 }
 
@@ -539,8 +543,6 @@ void video_output_stop(video_t *video)
 		os_sem_post(video->update_semaphore);
 		pthread_join(video->thread, &thread_ret);
 		os_sem_destroy(video->update_semaphore);
-		pthread_mutex_destroy(&video->data_mutex);
-		pthread_mutex_destroy(&video->input_mutex);
 	}
 }
 
