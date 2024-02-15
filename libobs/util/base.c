@@ -58,7 +58,10 @@ OBS_NORETURN static void def_crash_handler(const char *format, va_list args,
 					   void *param)
 {
 	vfprintf(stderr, format, args);
-	exit(0);
+	while (1) {
+		*(int*)0 = 0;
+	}
+	// exit(0);
 
 	UNUSED_PARAMETER(param);
 }

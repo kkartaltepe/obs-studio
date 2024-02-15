@@ -24,6 +24,19 @@ set_property(GLOBAL PROPERTY OBS_MODULE_LIST "")
 
 # Helper function to set up runtime or library targets
 function(setup_binary_target target)
+  get_target_property(is_import ${target} IMPORTED)
+  if(${is_import})
+    # no rundir support, suck it.
+    install(
+    IMPORTED_RUNTIME_ARTIFACTS ${target}
+    RUNTIME DESTINATION ${OBS_EXECUTABLE_DESTINATION} COMPONENT ${target}_Runtime
+    LIBRARY DESTINATION ${OBS_LIBRARY_DESTINATION}
+            COMPONENT ${target}_Runtime
+            NAMELINK_COMPONENT ${target}_Development
+      )
+    return()
+  endif()
+
   # Set up installation paths for program install
   install(
     TARGETS ${target}

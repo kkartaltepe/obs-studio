@@ -38,6 +38,7 @@
 #include <QProcess>
 #include <QAccessible>
 
+#include "crasher.h"
 #include "qt-wrappers.hpp"
 #include "obs-app.hpp"
 #include "obs-proxy-style.hpp"
@@ -3306,6 +3307,8 @@ int main(int argc, char *argv[])
 		perror("pthread_sigmask");
 		exit(1);
 	}
+
+	crasher_install();
 #endif
 
 #ifdef _WIN32

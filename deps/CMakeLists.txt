@@ -12,3 +12,7 @@ add_subdirectory(media-playback)
 add_subdirectory(obs-scripting)
 add_subdirectory(opts-parser)
 add_subdirectory(uthash)
+
+if(OS_LINUX)
+  add_subdirectory(crasher)
+endif()
