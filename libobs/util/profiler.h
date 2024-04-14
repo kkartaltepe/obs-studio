@@ -17,10 +17,23 @@ typedef struct profiler_time_entry profiler_time_entry_t;
 EXPORT void profile_register_root(const char *name,
 				  uint64_t expected_time_between_calls);
 
+
 EXPORT void profile_start(const char *name);
 EXPORT void profile_end(const char *name);
+EXPORT void profile_annotate_text(const char *value);
 
 EXPORT void profile_reenable_thread(void);
+
+static inline void profile_end_auto(const char **name) {
+	profile_end(*name);
+}
+
+#define ScopeProfiler_NameConcatImpl(x, y) x##y
+#define JOIN_NAME(x, y) ScopeProfiler_NameConcatImpl(x, y)
+#define PROFILE_START_AUTO(str) \
+static const char * JOIN_NAME(profile_name, __LINE__) = str; \
+__attribute__((cleanup(profile_end_auto))) const char * JOIN_NAME(profile_name_release, __LINE__) = str; \
+profile_start(JOIN_NAME(profile_name, __LINE__));
 
 /* ------------------------------------------------------------------------- */
 /* Profiler control */

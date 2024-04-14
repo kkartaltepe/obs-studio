@@ -259,6 +259,7 @@ target_link_libraries(
           OBS::libobs-version
           Uthash::Uthash
           ZLIB::ZLIB
+	  Tracy::TracyClient
   PUBLIC Threads::Threads)
 
 set_target_properties(

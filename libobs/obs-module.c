@@ -515,6 +515,18 @@ static void process_found_module(struct obs_module_path *omp, const char *path,
 	if (ext)
 		dstr_resize(&name, ext - name.array);
 
+	if(!strcmp(name.array, "libcef"))
+		return;
+	if(!strcmp(name.array, "libEGL"))
+		return;
+	if(!strcmp(name.array, "libGLESv2"))
+		return;
+	if(!strcmp(name.array, "libvk_swiftshader"))
+		return;
+
+	static const char *profile_name = "process_found_module";
+	profile_start(profile_name);
+
 	if (!directory) {
 		dstr_copy(&parsed_bin_path, path);
 	} else {
@@ -531,9 +543,11 @@ static void process_found_module(struct obs_module_path *omp, const char *path,
 		callback(param, &info);
 	}
 
+	profile_annotate_text(name.array);
 	bfree(parsed_data_dir);
 	dstr_free(&name);
 	dstr_free(&parsed_bin_path);
+	profile_end(profile_name);
 }
 
 static void find_modules_in_path(struct obs_module_path *omp,

@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+#include <unistd.h>
+
 #include <inttypes.h>
 #include "profiler.h"
 
@@ -9,6 +12,9 @@
 #include <math.h>
 
 #include <zlib.h>
+
+#include <tracy/TracyC.h>
+
 
 //#define TRACK_OVERHEAD
 
@@ -43,6 +49,8 @@ struct profile_call {
 #ifdef TRACK_OVERHEAD
 	uint64_t overhead_end;
 #endif
+	TracyCZoneCtx zctx;
+	pid_t tid;
 	uint64_t expected_time_between_calls;
 	DARRAY(profile_call) children;
 	profile_call *parent;
@@ -267,6 +275,7 @@ void profiler_start(void)
 {
 	pthread_mutex_lock(&root_mutex);
 	enabled = true;
+	___tracy_startup_profiler();
 	pthread_mutex_unlock(&root_mutex);
 }
 
@@ -274,6 +283,7 @@ void profiler_stop(void)
 {
 	pthread_mutex_lock(&root_mutex);
 	enabled = false;
+	___tracy_shutdown_profiler();
 	pthread_mutex_unlock(&root_mutex);
 }
 
@@ -377,6 +387,10 @@ void profile_start(const char *name)
 #endif
 		.parent = thread_context,
 	};
+	uint64_t srcloc = ___tracy_alloc_srcloc_name(0, "unknown", 7, "unknown", 7, name, strlen(name), 0);
+	TracyCZoneCtx zctx = ___tracy_emit_zone_begin_alloc(srcloc, thread_enabled);
+	new_call.zctx = zctx;
+	new_call.tid = gettid();
 
 	profile_call *call = NULL;
 
@@ -390,6 +404,12 @@ void profile_start(const char *name)
 
 	thread_context = call;
 	call->start_time = os_gettime_ns();
+
+}
+void profile_annotate_text(const char *value)
+{
+	profile_call *call = thread_context;
+	TracyCZoneText(call->zctx, value, strlen(value));
 }
 
 void profile_end(const char *name)
@@ -406,6 +426,10 @@ void profile_end(const char *name)
 
 	if (!call->name)
 		call->name = name;
+
+	if (call->tid != gettid()) {
+		blog(LOG_ERROR, "We transitioned across threads. prepare for sadness");
+	}
 
 	if (call->name != name) {
 		blog(LOG_ERROR,
@@ -428,6 +452,7 @@ void profile_end(const char *name)
 
 	thread_context = call->parent;
 
+	TracyCZoneEnd(call->zctx);
 	call->end_time = end;
 #ifdef TRACK_OVERHEAD
 	call->overhead_end = os_gettime_ns();
