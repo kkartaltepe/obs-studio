@@ -23,6 +23,7 @@
 #include "formats.h"
 
 #include <util/darray.h>
+#include <util/profiler.h>
 
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>
@@ -525,6 +526,8 @@ static void renegotiate_format(void *data, uint64_t expirations)
 	obs_pipewire *obs_pw = obs_pw_stream->obs_pw;
 	const struct spa_pod **params = NULL;
 
+	PROFILE_START_AUTO("renegotiate_format");
+
 	blog(LOG_INFO, "[pipewire] Renegotiating stream");
 
 	pw_thread_loop_lock(obs_pw->thread_loop);
@@ -614,6 +617,7 @@ static void process_video_async(obs_pipewire_stream *obs_pw_stream)
 	struct spa_buffer *buffer;
 	struct pw_buffer *b;
 	bool has_buffer;
+	PROFILE_START_AUTO("process_video_async");
 
 	b = find_latest_buffer(obs_pw_stream->stream);
 	if (!b) {
@@ -670,6 +674,7 @@ static void process_video_sync(obs_pipewire_stream *obs_pw_stream)
 	struct spa_buffer *buffer;
 	struct pw_buffer *b;
 	bool has_buffer = true;
+	PROFILE_START_AUTO("process_video_sync");
 
 	b = find_latest_buffer(obs_pw_stream->stream);
 	if (!b) {
@@ -872,6 +877,7 @@ static void on_param_changed_cb(void *user_data, uint32_t id, const struct spa_p
 	if (!param || id != SPA_PARAM_Format)
 		return;
 
+	PROFILE_START_AUTO("on_param_changed_cb");
 	result = spa_format_parse(param, &obs_pw_stream->format.media_type, &obs_pw_stream->format.media_subtype);
 	if (result < 0)
 		return;
