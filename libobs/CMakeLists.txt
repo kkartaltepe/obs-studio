@@ -33,6 +33,9 @@ find_package(jansson REQUIRED)
 if(NOT TARGET OBS::caption)
   add_subdirectory("${CMAKE_SOURCE_DIR}/deps/libcaption" "${CMAKE_BINARY_DIR}/deps/libcaption")
 endif()
+if(NOT TARGET Tracy::TracyClient)
+  add_subdirectory("${CMAKE_SOURCE_DIR}/deps/tracy" "${CMAKE_BINARY_DIR}/deps/tracy")
+endif()
 
 add_library(libobs SHARED)
 add_library(OBS::libobs ALIAS libobs)
@@ -257,6 +260,7 @@ target_link_libraries(
           jansson::jansson
           Uthash::Uthash
           ZLIB::ZLIB
+          Tracy::TracyClient
   PUBLIC Threads::Threads)
 
 if(OS_WINDOWS)
