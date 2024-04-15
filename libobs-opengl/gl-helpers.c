@@ -16,6 +16,7 @@
 ******************************************************************************/
 
 #include "gl-subsystem.h"
+#include <util/profiler.h>
 
 bool gl_init_face(GLenum target, GLenum type, uint32_t num_levels,
 		  GLenum format, GLint internal_format, bool compressed,
@@ -148,6 +149,7 @@ bool update_buffer(GLenum target, GLuint buffer, const void *data, size_t size)
 {
 	void *ptr;
 	bool success = true;
+	PROFILE_START_AUTO("gl_update_buffer");
 
 	if (!gl_bind_buffer(target, buffer))
 		return false;
