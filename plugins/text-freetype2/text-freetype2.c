@@ -273,6 +273,7 @@ static void ft2_source_render(void *data, gs_effect_t *effect)
 		return;
 	if (srcdata->text == NULL || *srcdata->text == 0)
 		return;
+	PROFILE_START_AUTO("tf2_source_render");
 
 	gs_reset_blend_state();
 	if (srcdata->outline_text)

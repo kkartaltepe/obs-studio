@@ -17,6 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <obs-module.h>
 #include <util/platform.h>
+#include <util/profiler.h>
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <sys/stat.h>
@@ -230,6 +231,7 @@ void load_glyph(struct ft2_source *srcdata, const FT_UInt glyph_index,
 	const FT_Int32 load_mode = render_mode == FT_RENDER_MODE_MONO
 					   ? FT_LOAD_TARGET_MONO
 					   : FT_LOAD_DEFAULT;
+	PROFILE_START_AUTO("load_glyph");
 	FT_Load_Glyph(srcdata->font_face, glyph_index, load_mode);
 }
 
@@ -294,6 +296,7 @@ void cache_glyphs(struct ft2_source *srcdata, wchar_t *cache_glyphs)
 {
 	if (!srcdata->font_face || !cache_glyphs)
 		return;
+	PROFILE_START_AUTO("cache_glyphs");
 
 	FT_GlyphSlot slot = srcdata->font_face->glyph;
 
@@ -314,7 +317,10 @@ void cache_glyphs(struct ft2_source *srcdata, wchar_t *cache_glyphs)
 		}
 
 		load_glyph(srcdata, glyph_index, render_mode);
+		static const char *profile_name = "FT_render_glyph";
+		profile_start(profile_name);
 		FT_Render_Glyph(slot, render_mode);
+		profile_end(profile_name);
 
 		const uint32_t g_w = slot->bitmap.width;
 		const uint32_t g_h = slot->bitmap.rows;
@@ -533,6 +539,7 @@ uint32_t get_ft2_text_width(wchar_t *text, struct ft2_source *srcdata)
 	if (!text) {
 		return 0;
 	}
+	PROFILE_START_AUTO("get_ft2_text_width");
 
 	FT_GlyphSlot slot = srcdata->font_face->glyph;
 	uint32_t w = 0, max_w = 0;
