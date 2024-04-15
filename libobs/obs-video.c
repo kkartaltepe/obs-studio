@@ -60,6 +60,8 @@ static uint64_t tick_sources(uint64_t cur_time, uint64_t last_time)
 
 	da_clear(data->sources_to_tick);
 
+	static const char *profile_get_sources = "get_sources";
+	profile_start(profile_get_sources);
 	pthread_mutex_lock(&data->sources_mutex);
 
 	source = data->sources;
@@ -71,6 +73,7 @@ static uint64_t tick_sources(uint64_t cur_time, uint64_t last_time)
 	}
 
 	pthread_mutex_unlock(&data->sources_mutex);
+	profile_end(profile_get_sources);
 
 	/* ------------------------------------- */
 	/* call the tick function of each source */
@@ -1212,9 +1215,12 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 
 	profile_start(context->video_thread_name);
 
+	static const char *profile_begin_frame = "gs_begin_frame";
+	profile_start(profile_begin_frame);
 	gs_enter_context(obs->video.graphics);
 	gs_begin_frame();
 	gs_leave_context();
+	profile_end(profile_begin_frame);
 
 	profile_start(tick_sources_name);
 	context->last_time =

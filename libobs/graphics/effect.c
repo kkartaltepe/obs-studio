@@ -21,6 +21,10 @@
 #include "vec3.h"
 #include "vec4.h"
 
+#include "../util/profiler.h"
+// Is this one smart?
+#include "../obs.h"
+
 void gs_effect_actually_destroy(gs_effect_t *effect)
 {
 	effect_free(effect);
@@ -104,6 +108,11 @@ size_t gs_technique_begin(gs_technique_t *tech)
 {
 	if (!tech)
 		return 0;
+	const char *profile_name = profile_store_name(
+		obs_get_profiler_name_store(), "tech(%s)",
+		tech->name);
+	profile_start(profile_name);
+	tech->profile_name = profile_name;
 
 	tech->effect->cur_technique = tech;
 	tech->effect->graphics->cur_effect = tech->effect;
@@ -134,6 +143,7 @@ void gs_technique_end(gs_technique_t *tech)
 		if (param->next_sampler)
 			param->next_sampler = NULL;
 	}
+	profile_end(tech->profile_name);
 }
 
 static inline void reset_params(pass_shaderparam_array_t *shaderparams)
@@ -249,12 +259,14 @@ static inline void clear_tex_params(pass_shaderparam_array_t *in_params)
 
 void gs_technique_end_pass(gs_technique_t *tech)
 {
-	if (!tech)
+	if (!tech) {
 		return;
+	}
 
 	struct gs_effect_pass *pass = tech->effect->cur_pass;
-	if (!pass)
+	if (!pass) {
 		return;
+	}
 
 	clear_tex_params(&pass->vertshader_params);
 	clear_tex_params(&pass->pixelshader_params);

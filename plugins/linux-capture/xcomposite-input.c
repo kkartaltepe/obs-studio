@@ -19,6 +19,7 @@
 #include "xcursor-xcb.h"
 #include "xcomposite-input.h"
 #include <util/platform.h>
+#include <util/profiler.h>
 #include <util/dstr.h>
 #include <util/darray.h>
 
@@ -709,6 +710,7 @@ static void xcompcap_video_render(void *data, gs_effect_t *effect)
 {
 	gs_eparam_t *image; // Placate C++ goto rules.
 	struct xcompcap *s = (struct xcompcap *)data;
+	PROFILE_START_AUTO("xcompcap_render");
 
 	pthread_mutex_lock(&s->lock);
 

@@ -27,7 +27,6 @@ EXPORT void profile_reenable_thread(void);
 static inline void profile_end_auto(const char **name) {
 	profile_end(*name);
 }
-
 #define ScopeProfiler_NameConcatImpl(x, y) x##y
 #define JOIN_NAME(x, y) ScopeProfiler_NameConcatImpl(x, y)
 #define PROFILE_START_AUTO(str) \

@@ -22,6 +22,7 @@
 #include "graphics.h"
 #include "matrix3.h"
 #include "matrix4.h"
+#include <tracy/TracyC.h>
 
 struct gs_exports {
 	const char *(*device_get_name)(void);
@@ -409,6 +410,7 @@ struct graphics_subsystem {
 	pthread_mutex_t effect_mutex;
 	struct gs_effect *first_effect;
 
+	TracyCLockCtx tracy_mutex;
 	pthread_mutex_t mutex;
 	volatile long ref;
 

@@ -17,6 +17,7 @@
 ******************************************************************************/
 
 #include "util/threading.h"
+#include "util/profiler.h"
 #include "util/util_uint64.h"
 #include "graphics/math-defs.h"
 #include "obs-scene.h"
@@ -973,6 +974,7 @@ static void scene_video_render(void *data, gs_effect_t *effect)
 	obs_scene_item_ptr_array_t remove_items;
 	struct obs_scene *scene = data;
 	struct obs_scene_item *item;
+	PROFILE_START_AUTO("scene_video_render");
 
 	da_init(remove_items);
 
