@@ -4527,6 +4527,7 @@ void OBSBasic::DrawBackdrop(float cx, float cy)
 		return;
 
 	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_DEFAULT, "DrawBackdrop");
+	ProfileScope("OBSBasic::DrawBackdrop");
 
 	gs_effect_t *solid = obs_get_base_effect(OBS_EFFECT_SOLID);
 	gs_eparam_t *color = gs_effect_get_param_by_name(solid, "color");
@@ -4557,6 +4558,7 @@ void OBSBasic::DrawBackdrop(float cx, float cy)
 void OBSBasic::RenderMain(void *data, uint32_t, uint32_t)
 {
 	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_DEFAULT, "RenderMain");
+	ProfileScope("OBSBasic::RenderMain");
 
 	OBSBasic *window = static_cast<OBSBasic *>(data);
 	obs_video_info ovi;
@@ -4628,6 +4630,7 @@ void OBSBasic::RenderMain(void *data, uint32_t, uint32_t)
 
 	gs_projection_pop();
 	gs_viewport_pop();
+
 
 	GS_DEBUG_MARKER_END();
 }

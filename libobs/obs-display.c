@@ -18,6 +18,7 @@
 #include "graphics/vec4.h"
 #include "obs.h"
 #include "obs-internal.h"
+#include "util/profiler.h"
 
 bool obs_display_init(struct obs_display *display,
 		      const struct gs_init_data *graphics_data)
@@ -246,6 +247,7 @@ void render_display(struct obs_display *display)
 		return;
 
 	/* -------------------------------------------- */
+	PROFILE_START_AUTO("render_display");
 
 	pthread_mutex_lock(&display->draw_info_mutex);
 

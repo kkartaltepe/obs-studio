@@ -30,6 +30,7 @@
 #include <obs.h>
 #include <qpointer.h>
 #include <util/c99defs.h>
+#include <util/profiler.hpp>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN 1
@@ -388,6 +389,7 @@ void OBSBasicProperties::on_buttonBox_clicked(QAbstractButton *button)
 void OBSBasicProperties::DrawPreview(void *data, uint32_t cx, uint32_t cy)
 {
 	OBSBasicProperties *window = static_cast<OBSBasicProperties *>(data);
+	ProfileScope("OBSBasicProperties::DrawPreview");
 
 	if (!window->source)
 		return;

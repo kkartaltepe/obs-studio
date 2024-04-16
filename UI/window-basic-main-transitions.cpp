@@ -20,6 +20,7 @@
 #include <QToolTip>
 #include <QMessageBox>
 #include <util/dstr.hpp>
+#include <util/profiler.hpp>
 #include "window-basic-main.hpp"
 #include "window-basic-main-outputs.hpp"
 #include "window-basic-vcam-config.hpp"
@@ -1719,6 +1720,7 @@ void OBSBasic::SetPreviewProgramMode(bool enabled)
 void OBSBasic::RenderProgram(void *data, uint32_t, uint32_t)
 {
 	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_DEFAULT, "RenderProgram");
+	ProfileScope("OBSBasic::RenderProgram");
 
 	OBSBasic *window = static_cast<OBSBasic *>(data);
 	obs_video_info ovi;
