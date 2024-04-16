@@ -21,6 +21,7 @@
 #include <dialogs/NameDialog.hpp>
 #include <utility/display-helpers.hpp>
 #include <utility/QuickTransition.hpp>
+#include <util/dstr.hpp>
 
 #include <qt-wrappers.hpp>
 #include <slider-ignorewheel.hpp>

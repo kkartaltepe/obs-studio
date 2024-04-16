@@ -1866,6 +1866,7 @@ bool gs_is_present_ready(void)
 void gs_present(void)
 {
 	graphics_t *graphics = thread_graphics;
+	PROFILE_START_AUTO("gs_present");
 
 	if (!gs_valid("gs_present"))
 		return;

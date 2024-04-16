@@ -19,6 +19,8 @@
 
 #include <utility/display-helpers.hpp>
 #include <widgets/OBSBasic.hpp>
+#include <util/c99defs.h>
+#include <util/profiler.hpp>
 
 #include <properties-view.hpp>
 #include <qt-wrappers.hpp>
@@ -345,6 +347,7 @@ void OBSBasicProperties::on_buttonBox_clicked(QAbstractButton *button)
 void OBSBasicProperties::DrawPreview(void *data, uint32_t cx, uint32_t cy)
 {
 	OBSBasicProperties *window = static_cast<OBSBasicProperties *>(data);
+	ProfileScope("OBSBasicProperties::DrawPreview");
 
 	if (!window->source)
 		return;

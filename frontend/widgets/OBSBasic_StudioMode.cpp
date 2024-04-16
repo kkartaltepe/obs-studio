@@ -20,6 +20,7 @@
 #include "OBSBasic.hpp"
 #include "OBSProjector.hpp"
 
+#include <util/profiler.hpp>
 #include <utility/display-helpers.hpp>
 #include <utility/QuickTransition.hpp>
 
@@ -287,6 +288,7 @@ void OBSBasic::SetPreviewProgramMode(bool enabled)
 void OBSBasic::RenderProgram(void *data, uint32_t, uint32_t)
 {
 	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_DEFAULT, "RenderProgram");
+	ProfileScope("OBSBasic::RenderProgram");
 
 	OBSBasic *window = static_cast<OBSBasic *>(data);
 	obs_video_info ovi;
