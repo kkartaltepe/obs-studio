@@ -445,14 +445,20 @@ static inline bool ffmpeg_mux_start_internal(struct ffmpeg_muxer *stream,
 		 *
 		 * TODO: remove once ffmpeg-mux is refactored to pass
 		 * errors back */
+		/*
+		static const char *profile_touch_output = "ffmpeg_mux_touch_output";
+		profile_start(profile_touch_output);
 		FILE *test_file = os_fopen(path, "wb");
 		if (!test_file) {
 			set_file_not_readable_error(stream, settings, path);
+			profile_end(profile_touch_output);
 			return false;
 		}
 
 		fclose(test_file);
 		os_unlink(path);
+		profile_end(profile_touch_output);
+		*/
 	}
 
 	start_pipe(stream, path);

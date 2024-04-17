@@ -7233,9 +7233,12 @@ inline void OBSBasic::OnActivate(bool force)
 			trayIcon->setIcon(
 				QIcon::fromTheme("obs-tray", trayMask));
 #else
+			/*
+			ProfileScope("QtTrayIcon::setIcon");
 			trayIcon->setIcon(QIcon::fromTheme(
 				"obs-tray-active",
 				QIcon(":/res/images/tray_active.png")));
+				*/
 #endif
 		}
 	}
@@ -7441,6 +7444,7 @@ void OBSBasic::StreamingStart()
 
 #ifdef YOUTUBE_ENABLED
 	if (!autoStartBroadcast) {
+		ProfileScope("OBSBasic::YoutubeShit");
 		// get a current stream key
 		obs_service_t *service_obj = GetService();
 		OBSDataAutoRelease settings =
