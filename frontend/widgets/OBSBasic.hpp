@@ -673,7 +673,7 @@ private:
 			lastOutputResolution = {ovi.base_width, ovi.base_height};
 
 			TaskbarOverlaySetStatus(TaskbarOverlayStatusActive);
-			if (trayIcon && trayIcon->isVisible()) {
+			if (false && trayIcon && trayIcon->isVisible()) {
 #ifdef __APPLE__
 				QIcon trayMask = QIcon(":/res/images/tray_active_macos.svg");
 				trayMask.setIsMask(true);
@@ -695,7 +695,7 @@ private:
 			ClearProcessPriority();
 
 			TaskbarOverlaySetStatus(TaskbarOverlayStatusInactive);
-			if (trayIcon && trayIcon->isVisible()) {
+			if (false && trayIcon && trayIcon->isVisible()) {
 #ifdef __APPLE__
 				QIcon trayIconFile = QIcon(":/res/images/obs_macos.svg");
 				trayIconFile.setIsMask(true);
@@ -704,7 +704,7 @@ private:
 #endif
 				trayIcon->setIcon(QIcon::fromTheme("obs-tray", trayIconFile));
 			}
-		} else if (outputHandler->Active() && trayIcon && trayIcon->isVisible()) {
+		} else if (outputHandler->Active() && false && trayIcon && trayIcon->isVisible()) {
 			if (os_atomic_load_bool(&recording_paused)) {
 #ifdef __APPLE__
 				QIcon trayIconFile = QIcon(":/res/images/obs_paused_macos.svg");
