@@ -16,6 +16,7 @@
 ******************************************************************************/
 #include <assert.h>
 #include "video-frame.h"
+#include "util/profiler.h"
 
 #define HALF(size) ((size + 1) / 2)
 #define ALIGN(size, alignment) *size = (*size + alignment - 1) & (~(alignment - 1));
@@ -197,6 +198,8 @@ void video_frame_init(struct video_frame *frame, enum video_format format, uint3
 
 	if (!frame)
 		return;
+
+	PROFILE_START_AUTO("video_frame_init");
 
 	memset(frame, 0, sizeof(struct video_frame));
 	memset(linesizes, 0, sizeof(linesizes));

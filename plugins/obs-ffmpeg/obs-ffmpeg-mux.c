@@ -23,6 +23,7 @@
 #endif
 
 #include <libavformat/avformat.h>
+#include <util/profiler.h>
 
 #define do_log(level, format, ...) \
 	blog(level, "[ffmpeg muxer: '%s'] " format, obs_output_get_name(stream->output), ##__VA_ARGS__)
@@ -304,6 +305,7 @@ static void build_command_line(struct ffmpeg_muxer *stream, os_process_args_t **
 
 void start_pipe(struct ffmpeg_muxer *stream, const char *path)
 {
+	PROFILE_START_AUTO("start_pipe");
 	os_process_args_t *args = NULL;
 	build_command_line(stream, &args, path);
 	stream->pipe = os_process_pipe_create2(args, "w");
@@ -444,6 +446,7 @@ static inline bool ffmpeg_mux_start_internal(struct ffmpeg_muxer *stream, obs_da
 static bool ffmpeg_mux_start(void *data)
 {
 	struct ffmpeg_muxer *stream = data;
+	PROFILE_START_AUTO("ffmpeg_mux_start");
 
 	obs_data_t *settings = obs_output_get_settings(stream->output);
 	bool success = ffmpeg_mux_start_internal(stream, settings);
@@ -776,6 +779,7 @@ static void ffmpeg_mux_data(void *data, struct encoder_packet *packet)
 
 	if (!active(stream))
 		return;
+	PROFILE_START_AUTO("ffmpeg_mux_data");
 
 	/* encoder failure */
 	if (!packet) {

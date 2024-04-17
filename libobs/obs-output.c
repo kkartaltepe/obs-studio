@@ -17,6 +17,7 @@
 
 #include <inttypes.h>
 #include "util/platform.h"
+#include "util/profiler.h"
 #include "util/util_uint64.h"
 #include "util/array-serializer.h"
 #include "graphics/math-extra.h"
@@ -1646,6 +1647,7 @@ static bool add_caption(struct obs_output *output, struct encoder_packet *out)
 
 static inline void send_interleaved(struct obs_output *output)
 {
+	PROFILE_START_AUTO("send_interleaved");
 	struct encoder_packet out = output->interleaved_packets.array[0];
 	struct encoder_packet_time ept_local = {0};
 	bool found_ept = false;
@@ -1955,6 +1957,7 @@ static bool initialize_interleaved_packets(struct obs_output *output)
 	size_t start_idx;
 	size_t first_audio_idx;
 	size_t first_video_idx;
+	PROFILE_START_AUTO("initialize_interleaved_packets");
 
 	if (!get_first_audio_encoder_index(output, &first_audio_idx))
 		return false;
@@ -2024,6 +2027,7 @@ static bool initialize_interleaved_packets(struct obs_output *output)
 
 static inline void insert_interleaved_packet(struct obs_output *output, struct encoder_packet *out)
 {
+	PROFILE_START_AUTO("insert_interleaved_packet");
 	size_t idx;
 	for (idx = 0; idx < output->interleaved_packets.num; idx++) {
 		struct encoder_packet *cur_packet;
@@ -2049,6 +2053,7 @@ static inline void insert_interleaved_packet(struct obs_output *output, struct e
 static void resort_interleaved_packets(struct obs_output *output)
 {
 	DARRAY(struct encoder_packet) old_array;
+	PROFILE_START_AUTO("resort_interleaved_packets");
 
 	old_array.da = output->interleaved_packets.da;
 	memset(&output->interleaved_packets, 0, sizeof(output->interleaved_packets));
@@ -2163,6 +2168,8 @@ static void interleave_packets(void *data, struct encoder_packet *packet, struct
 
 	if (!active(output))
 		return;
+
+	PROFILE_START_AUTO("interleave_packets");
 
 	packet->track_idx = get_encoder_index(output, packet);
 
@@ -2355,6 +2362,7 @@ static void default_raw_audio_callback(void *param, size_t mix_idx, struct audio
 
 static inline void start_audio_encoders(struct obs_output *output, encoded_callback_t encoded_callback)
 {
+	PROFILE_START_AUTO("start_audio_encoders");
 	for (size_t i = 0; i < MAX_OUTPUT_AUDIO_ENCODERS; i++) {
 		if (output->audio_encoders[i]) {
 			obs_encoder_start(output->audio_encoders[i], encoded_callback, output);
@@ -2364,6 +2372,7 @@ static inline void start_audio_encoders(struct obs_output *output, encoded_callb
 
 static inline void start_video_encoders(struct obs_output *output, encoded_callback_t encoded_callback)
 {
+	PROFILE_START_AUTO("start_video_encoders");
 	for (size_t i = 0; i < MAX_OUTPUT_VIDEO_ENCODERS; i++) {
 		if (output->video_encoders[i]) {
 			obs_encoder_start(output->video_encoders[i], encoded_callback, output);
@@ -2413,6 +2422,7 @@ static inline bool preserve_active(struct obs_output *output)
 
 static void hook_data_capture(struct obs_output *output)
 {
+	PROFILE_START_AUTO("hook_data_capture");
 	encoded_callback_t encoded_callback;
 	bool has_video = flag_video(output);
 	bool has_audio = flag_audio(output);
@@ -2452,6 +2462,7 @@ static void hook_data_capture(struct obs_output *output)
 
 static inline void signal_start(struct obs_output *output)
 {
+	PROFILE_START_AUTO("output_signal_start");
 	do_output_signal(output, "start");
 }
 
@@ -2564,6 +2575,7 @@ static inline void pair_encoders(obs_output_t *output)
 bool obs_output_initialize_encoders(obs_output_t *output, uint32_t flags)
 {
 	UNUSED_PARAMETER(flags);
+	PROFILE_START_AUTO("obs_output_initialize_encoders");
 
 	if (!obs_output_valid(output, "obs_output_initialize_encoders"))
 		return false;
@@ -2637,6 +2649,7 @@ static void reset_raw_output(obs_output_t *output)
 bool obs_output_begin_data_capture(obs_output_t *output, uint32_t flags)
 {
 	UNUSED_PARAMETER(flags);
+	PROFILE_START_AUTO("obs_output_begin_data_capture");
 
 	if (!obs_output_valid(output, "obs_output_begin_data_capture"))
 		return false;
