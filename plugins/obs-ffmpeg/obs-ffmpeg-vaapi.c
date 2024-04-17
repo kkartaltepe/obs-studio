@@ -21,6 +21,7 @@
 #include <util/dstr.h>
 #include <util/base.h>
 #include <util/platform.h>
+#include <util/profiler.h>
 #include <media-io/video-io.h>
 #include <obs-module.h>
 #include <obs-avc.h>
@@ -148,6 +149,7 @@ static void vaapi_video_info(void *data, struct video_scale_info *info)
 static bool vaapi_init_codec(struct vaapi_encoder *enc, const char *path)
 {
 	int ret;
+	PROFILE_START_AUTO("ffmpeg_vaapi_init_codec");
 
 	ret = av_hwdevice_ctx_create(&enc->vadevice_ref, AV_HWDEVICE_TYPE_VAAPI,
 				     path, NULL, 0);
@@ -247,6 +249,7 @@ static const rc_mode_t *get_rc_mode(const char *name)
 static bool vaapi_update(void *data, obs_data_t *settings)
 {
 	struct vaapi_encoder *enc = data;
+	PROFILE_START_AUTO("ffmpeg_vaapi_update");
 
 	const char *device = obs_data_get_string(settings, "vaapi_device");
 
@@ -551,6 +554,7 @@ static void *vaapi_create_internal(obs_data_t *settings, obs_encoder_t *encoder,
 				   enum codec_type codec)
 {
 	struct vaapi_encoder *enc;
+	PROFILE_START_AUTO("ffmpeg_vaapi_create");
 
 	enc = bzalloc(sizeof(*enc));
 	enc->encoder = encoder;
@@ -683,6 +687,7 @@ static bool vaapi_encode_internal(struct vaapi_encoder *enc, AVFrame *frame,
 {
 	int got_packet;
 	int ret;
+	PROFILE_START_AUTO("ffmpeg_vaapi_encode");
 
 	ret = avcodec_send_frame(enc->context, frame);
 	if (ret == 0 || ret == AVERROR(EAGAIN))

@@ -7217,6 +7217,7 @@ static inline void ClearProcessPriority()
 
 inline void OBSBasic::OnActivate(bool force)
 {
+	ProfileScope("OBSBasic::OnActivate");
 	if (ui->profileMenu->isEnabled() || force) {
 		ui->profileMenu->setEnabled(false);
 		ui->autoConfigure->setEnabled(false);
@@ -7435,6 +7436,7 @@ void OBSBasic::StreamDelayStopping(int sec)
 
 void OBSBasic::StreamingStart()
 {
+	ProfileScope("OBSBasic::StartStreaming");
 	ui->streamButton->setText(QTStr("Basic.Main.StopStreaming"));
 	ui->streamButton->setEnabled(true);
 	ui->streamButton->setChecked(true);

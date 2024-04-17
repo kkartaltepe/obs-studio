@@ -1,6 +1,7 @@
 #include <string>
 #include <algorithm>
 #include <QMessageBox>
+#include <util/profiler.hpp>
 #include "qt-wrappers.hpp"
 #include "audio-encoders.hpp"
 #include "window-basic-main.hpp"
@@ -51,6 +52,7 @@ static void OBSStreamStopping(void *data, calldata_t *params)
 
 static void OBSStartStreaming(void *data, calldata_t * /* params */)
 {
+	ProfileScope("OBSMainOutputs::OBSStartStreaming");
 	BasicOutputHandler *output = static_cast<BasicOutputHandler *>(data);
 	output->streamingActive = true;
 	os_atomic_set_bool(&streaming_active, true);

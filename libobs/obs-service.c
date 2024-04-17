@@ -251,6 +251,7 @@ const char *obs_service_get_password(const obs_service_t *service)
 
 void obs_service_activate(struct obs_service *service)
 {
+	PROFILE_START_AUTO("obs_service_activate");
 	if (!obs_service_valid(service, "obs_service_activate"))
 		return;
 	if (!service->output) {

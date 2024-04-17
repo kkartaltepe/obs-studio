@@ -678,6 +678,7 @@ static void set_gpu_converted_data(struct video_frame *output,
 				   const struct video_data *input,
 				   const struct video_output_info *info)
 {
+	PROFILE_START_AUTO("set_gpu_converted_data");
 	switch (info->format) {
 	case VIDEO_FORMAT_I420: {
 		const uint32_t width = info->width;
@@ -852,6 +853,7 @@ static inline void copy_rgbx_frame(struct video_frame *output,
 {
 	uint8_t *in_ptr = input->data[0];
 	uint8_t *out_ptr = output->data[0];
+	PROFILE_START_AUTO("copy_rgbx_frame");
 
 	/* if the line sizes match, do a single copy */
 	if (input->linesize[0] == output->linesize[0]) {

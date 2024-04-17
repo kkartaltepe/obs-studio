@@ -19,6 +19,7 @@
 #include <util/deque.h>
 #include <util/darray.h>
 #include <util/dstr.h>
+#include <util/profiler.h>
 #include <obs-module.h>
 
 #include <libavutil/channel_layout.h>
@@ -213,6 +214,8 @@ static void *enc_create(obs_data_t *settings, obs_encoder_t *encoder,
 			const char *type, const char *alt,
 			enum AVSampleFormat sample_format)
 {
+	PROFILE_START_AUTO("ffmpeg_audio_enc_create");
+	profile_annotate_text(type);
 	struct enc_encoder *enc;
 	int bitrate = (int)obs_data_get_int(settings, "bitrate");
 	audio_t *audio = obs_encoder_audio(encoder);

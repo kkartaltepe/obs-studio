@@ -305,6 +305,7 @@ static void maybe_set_up_gpu_rescale(struct obs_encoder *encoder)
 
 static void add_connection(struct obs_encoder *encoder)
 {
+	PROFILE_START_AUTO("encoder_add_connection");
 	if (encoder->info.type == OBS_ENCODER_AUDIO) {
 		struct audio_convert_info audio_info = {0};
 		get_audio_info(encoder, &audio_info);
