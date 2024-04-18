@@ -1306,33 +1306,27 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 		return;
 
 	if (source->info.type == OBS_SOURCE_TYPE_TRANSITION) {
-		const char *profile_name = profile_store_name(
-			obs_get_profiler_name_store(), "video_tick_transition(%s)",
-			source->info.id);
-		profile_start(profile_name);
+		PROFILE_STARTL_HERE("video_tick_transition");
+		profile_annotate_text(source->info.id);
 		obs_transition_tick(source, seconds);
-		profile_end(profile_name);
+		profile_endL();
 	}
 
 	if ((source->info.output_flags & OBS_SOURCE_ASYNC) != 0) {
-		const char *profile_name = profile_store_name(
-			obs_get_profiler_name_store(), "video_tick_sync(%s)",
-			source->info.id);
-		profile_start(profile_name);
+		PROFILE_STARTL_HERE("video_tick_sync");
+		profile_annotate_text(source->info.id);
 		async_tick(source);
-		profile_end(profile_name);
+		profile_endL();
 	}
 
 	if ((source->info.output_flags & OBS_SOURCE_CONTROLLABLE_MEDIA) != 0)
 		process_media_actions(source);
 
 	if (os_atomic_load_long(&source->defer_update_count) > 0) {
-		const char *profile_name = profile_store_name(
-			obs_get_profiler_name_store(), "video_tick_defer_update(%s)",
-			source->info.id);
-		profile_start(profile_name);
+		PROFILE_STARTL_HERE("video_tick_defer_update");
+		profile_annotate_text(source->info.id);
 		obs_source_deferred_update(source);
-		profile_end(profile_name);
+		profile_endL();
 	}
 
 	/* reset the filter render texture information once every frame */
@@ -1342,10 +1336,8 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 	/* call show/hide if the reference changed */
 	now_showing = !!source->show_refs;
 	if (now_showing != source->showing) {
-		const char *profile_name = profile_store_name(
-			obs_get_profiler_name_store(), "video_tick_show/hide(%s)",
-			source->info.id);
-		profile_start(profile_name);
+		PROFILE_STARTL_HERE("video_tick_show/hide");
+		profile_annotate_text(source->info.id);
 		if (now_showing) {
 			show_source(source);
 		} else {
@@ -1365,16 +1357,14 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 		}
 
 		source->showing = now_showing;
-		profile_end(profile_name);
+		profile_endL();
 	}
 
 	/* call activate/deactivate if the reference changed */
 	now_active = !!source->activate_refs;
 	if (now_active != source->active) {
-		const char *profile_name = profile_store_name(
-			obs_get_profiler_name_store(), "video_tick_de/activate(%s)",
-			source->info.id);
-		profile_start(profile_name);
+		PROFILE_STARTL_HERE("video_tick_de/activate");
+		profile_annotate_text(source->info.id);
 		if (now_active) {
 			activate_source(source);
 		} else {
@@ -1394,16 +1384,14 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 		}
 
 		source->active = now_active;
-		profile_end(profile_name);
+		profile_endL();
 	}
 
-	const char *profile_name =
-		profile_store_name(obs_get_profiler_name_store(),
-				   "video_tick_sync(%s)", source->info.id);
-	profile_start(profile_name);
+	PROFILE_STARTL_HERE("video_tick_sync");
+	profile_annotate_text(source->info.id);
 	if (source->context.data && source->info.video_tick)
 		source->info.video_tick(source->context.data, seconds);
-	profile_end(profile_name);
+	profile_endL();
 
 	source->async_rendered = false;
 	source->deinterlace_rendered = false;

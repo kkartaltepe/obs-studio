@@ -6,7 +6,7 @@ struct ScopeProfiler {
 	const char *name;
 	bool enabled = true;
 
-	ScopeProfiler(const char *name) : name(name) { profile_start(name); }
+	ScopeProfiler(const char *name) : name(name) { profile_startL(name, nullptr); }
 
 	~ScopeProfiler() { Stop(); }
 
@@ -26,7 +26,8 @@ struct ScopeProfiler {
 		if (!enabled)
 			return;
 
-		profile_end(name);
+		// Temp... I guess
+		profile_endL();
 		enabled = false;
 	}
 };

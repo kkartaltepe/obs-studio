@@ -108,11 +108,8 @@ size_t gs_technique_begin(gs_technique_t *tech)
 {
 	if (!tech)
 		return 0;
-	const char *profile_name = profile_store_name(
-		obs_get_profiler_name_store(), "tech(%s)",
-		tech->name);
-	profile_start(profile_name);
-	tech->profile_name = profile_name;
+	PROFILE_STARTL_HERE("tech");
+	profile_annotate_name(tech->name);
 
 	tech->effect->cur_technique = tech;
 	tech->effect->graphics->cur_effect = tech->effect;
@@ -143,7 +140,7 @@ void gs_technique_end(gs_technique_t *tech)
 		if (param->next_sampler)
 			param->next_sampler = NULL;
 	}
-	profile_end(tech->profile_name);
+	profile_endL();
 }
 
 static inline void reset_params(pass_shaderparam_array_t *shaderparams)

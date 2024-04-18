@@ -17,22 +17,55 @@ typedef struct profiler_time_entry profiler_time_entry_t;
 EXPORT void profile_register_root(const char *name,
 				  uint64_t expected_time_between_calls);
 
-
 EXPORT void profile_start(const char *name);
 EXPORT void profile_end(const char *name);
-EXPORT void profile_annotate_text(const char *value);
 
 EXPORT void profile_reenable_thread(void);
 
-static inline void profile_end_auto(const char **name) {
-	profile_end(*name);
+struct profile_source_location_data {
+	const char *name;
+	const char *function;
+	const char *file;
+	uint32_t line;
+	uint32_t _color; //unused
+};
+
+// Make sure preprocessor things like __LINE__, etc. resolve
+#ifndef OBS_PROFILE_CONCAT_I
+#define OBS_PROFILE_CONCAT_I(x, y) x##y
+#endif
+#ifndef OBS_PROFILE_CONCAT
+#define OBS_PROFILE_CONCAT(x, y) OBS_PROFILE_CONCAT_I(x, y)
+#endif
+
+#define PROFILE_LOCATION_NAME \
+	OBS_PROFILE_CONCAT(__profile_source_location, __LINE__)
+
+#define PROFILE_LOCATION(name)                                     \
+	static const struct profile_source_location_data           \
+		PROFILE_LOCATION_NAME = {name, __func__, __FILE__, \
+					 (uint32_t)__LINE__, 0}
+#define PROFILE_STARTL_HERE(name) \
+	PROFILE_LOCATION(name);   \
+	profile_startL(NULL, &PROFILE_LOCATION_NAME)
+
+#define PROFILE_START_AUTO(str)                                      \
+	PROFILE_LOCATION(str);                                       \
+	__attribute__((cleanup(profile_end_auto)))                   \
+	const char *OBS_PROFILE_CONCAT(profile_zone_release, __LINE__) = str; \
+	profile_startL(NULL, &PROFILE_LOCATION_NAME)
+
+EXPORT void profile_startL(const char *name,
+			   const struct profile_source_location_data *data);
+EXPORT void profile_endL();
+EXPORT void profile_annotate_text(const char *value);
+EXPORT void profile_annotate_name(const char *value);
+
+static inline void profile_end_auto(const char **unused)
+{
+	UNUSED_PARAMETER(unused);
+	profile_endL();
 }
-#define ScopeProfiler_NameConcatImpl(x, y) x##y
-#define JOIN_NAME(x, y) ScopeProfiler_NameConcatImpl(x, y)
-#define PROFILE_START_AUTO(str) \
-static const char * JOIN_NAME(profile_name, __LINE__) = str; \
-__attribute__((cleanup(profile_end_auto))) const char * JOIN_NAME(profile_name_release, __LINE__) = str; \
-profile_start(JOIN_NAME(profile_name, __LINE__));
 
 /* ------------------------------------------------------------------------- */
 /* Profiler control */

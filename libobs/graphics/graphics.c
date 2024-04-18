@@ -266,10 +266,9 @@ void gs_destroy(graphics_t *graphics)
 	gs_free_image_deps();
 }
 
-static const char *profile_name_context = "gs_context_active";
 void gs_enter_context(graphics_t *graphics)
 {
-	profile_start(profile_name_context);
+	PROFILE_STARTL_HERE("gs_context_active");
 
 	if (!ptr_valid(graphics, "gs_enter_context"))
 		return;
@@ -293,7 +292,7 @@ void gs_enter_context(graphics_t *graphics)
 
 void gs_leave_context(void)
 {
-	profile_end(profile_name_context);
+	profile_endL();
 	if (gs_valid("gs_leave_context")) {
 		if (!os_atomic_dec_long(&thread_graphics->ref)) {
 			graphics_t *graphics = thread_graphics;

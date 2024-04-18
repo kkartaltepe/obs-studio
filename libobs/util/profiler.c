@@ -15,7 +15,6 @@
 
 #include <tracy/TracyC.h>
 
-
 //#define TRACK_OVERHEAD
 
 struct profiler_snapshot {
@@ -268,6 +267,8 @@ static bool enabled = false;
 static pthread_mutex_t root_mutex = PTHREAD_MUTEX_INITIALIZER;
 static DARRAY(profile_root_entry) root_entries;
 
+// Leaks perthread ata.
+static THREAD_LOCAL DARRAY(TracyCZoneCtx) thread_zctxs = {0};
 static THREAD_LOCAL profile_call *thread_context = NULL;
 static THREAD_LOCAL bool thread_enabled = true;
 
@@ -375,6 +376,38 @@ static void merge_context(profile_call *context)
 	free_call_context(prev_call);
 }
 
+void profile_startL(const char *name,
+		    const struct profile_source_location_data *data)
+{
+	if (!thread_enabled)
+		return;
+
+	TracyCZoneCtx *zctx_new = da_push_back_new(thread_zctxs);
+	if (!data) {
+		uint64_t srcloc = ___tracy_alloc_srcloc_name(
+			0, "unknown", 7, "unknown", 7, name, strlen(name), 0);
+		*zctx_new =
+			___tracy_emit_zone_begin_alloc(srcloc, thread_enabled);
+		return;
+	}
+
+	*zctx_new = ___tracy_emit_zone_begin(
+		(const struct ___tracy_source_location_data *)data,
+		thread_enabled);
+	if (name && name != data->name)
+		TracyCZoneName(*zctx_new, name, strlen(name));
+}
+
+void profile_endL()
+{
+	if (!thread_enabled)
+		return;
+
+	TracyCZoneCtx *zctx = da_end(thread_zctxs);
+	TracyCZoneEnd(*zctx);
+	da_pop_back(thread_zctxs);
+}
+
 void profile_start(const char *name)
 {
 	if (!thread_enabled)
@@ -387,9 +420,14 @@ void profile_start(const char *name)
 #endif
 		.parent = thread_context,
 	};
-	uint64_t srcloc = ___tracy_alloc_srcloc_name(0, "unknown", 7, "unknown", 7, name, strlen(name), 0);
-	TracyCZoneCtx zctx = ___tracy_emit_zone_begin_alloc(srcloc, thread_enabled);
+	/*
+	uint64_t srcloc = ___tracy_alloc_srcloc_name(0, "unknown", 7, "unknown",
+						     7, name, strlen(name), 0);
+	TracyCZoneCtx zctx =
+		___tracy_emit_zone_begin_alloc(srcloc, thread_enabled);
 	new_call.zctx = zctx;
+	*/
+	profile_startL(name, NULL);
 	new_call.tid = gettid();
 
 	profile_call *call = NULL;
@@ -404,12 +442,17 @@ void profile_start(const char *name)
 
 	thread_context = call;
 	call->start_time = os_gettime_ns();
-
 }
 void profile_annotate_text(const char *value)
 {
-	profile_call *call = thread_context;
-	TracyCZoneText(call->zctx, value, strlen(value));
+	TracyCZoneCtx *zctx = da_end(thread_zctxs);
+	TracyCZoneText(*zctx, value, strlen(value));
+}
+
+void profile_annotate_name(const char *value)
+{
+	TracyCZoneCtx *zctx = da_end(thread_zctxs);
+	TracyCZoneName(*zctx, value, strlen(value));
 }
 
 void profile_end(const char *name)
@@ -428,7 +471,8 @@ void profile_end(const char *name)
 		call->name = name;
 
 	if (call->tid != gettid()) {
-		blog(LOG_ERROR, "We transitioned across threads. prepare for sadness");
+		blog(LOG_ERROR,
+		     "We transitioned across threads. prepare for sadness");
 	}
 
 	if (call->name != name) {
@@ -452,7 +496,7 @@ void profile_end(const char *name)
 
 	thread_context = call->parent;
 
-	TracyCZoneEnd(call->zctx);
+	profile_endL();
 	call->end_time = end;
 #ifdef TRACK_OVERHEAD
 	call->overhead_end = os_gettime_ns();

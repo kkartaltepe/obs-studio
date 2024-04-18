@@ -127,7 +127,6 @@ static inline void effect_pass_free(struct gs_effect_pass *pass)
 
 struct gs_effect_technique {
 	char *name;
-	const char *profile_name; // Extra pointer for profiling.
 	enum effect_section section;
 	struct gs_effect *effect;
 
@@ -155,7 +154,6 @@ struct gs_effect {
 	bool processing;
 	bool cached;
 	char *effect_path, *effect_dir;
-	const char *profile_name; // Extra pointer for profiling.
 
 	gs_effect_param_array_t params;
 	DARRAY(struct gs_effect_technique) techniques;
