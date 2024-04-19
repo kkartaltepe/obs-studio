@@ -364,7 +364,8 @@ struct obs_core_video {
 	pthread_mutex_t encoder_group_mutex;
 	DARRAY(obs_weak_encoder_t *) ready_encoder_groups;
 
-	pthread_mutex_t mixes_mutex;
+	// pthread_mutex_t mixes_mutex;
+	pthread_rwlock_t mixes_rwlock;
 	DARRAY(struct obs_core_video_mix *) mixes;
 	struct obs_core_video_mix *main_mix;
 };

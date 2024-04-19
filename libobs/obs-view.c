@@ -178,10 +178,10 @@ video_t *obs_view_add2(obs_view_t *view, struct obs_video_info *ovi)
 	}
 	mix->view = view;
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	da_push_back(obs->video.mixes, &mix);
 	set_main_mix();
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	return mix->video;
 }
@@ -191,13 +191,13 @@ void obs_view_remove(obs_view_t *view)
 	if (!view)
 		return;
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		if (obs->video.mixes.array[i]->view == view)
 			obs->video.mixes.array[i]->view = NULL;
 	}
 	set_main_mix();
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 }
 
 bool obs_view_get_video_info(obs_view_t *view, struct obs_video_info *ovi)
@@ -205,16 +205,16 @@ bool obs_view_get_video_info(obs_view_t *view, struct obs_video_info *ovi)
 	if (!view)
 		return false;
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_rdlock(&obs->video.mixes_rwlock);
 
 	size_t idx = find_mix_for_view(view);
 	if (idx != DARRAY_INVALID) {
 		*ovi = obs->video.mixes.array[idx]->ovi;
-		pthread_mutex_unlock(&obs->video.mixes_mutex);
+		pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 		return true;
 	}
 
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	return false;
 }
@@ -224,7 +224,7 @@ void obs_view_enum_video_info(obs_view_t *view,
 						struct obs_video_info *),
 			      void *param)
 {
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_rdlock(&obs->video.mixes_rwlock);
 
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		struct obs_core_video_mix *mix = obs->video.mixes.array[i];
@@ -234,5 +234,5 @@ void obs_view_enum_video_info(obs_view_t *view,
 			break;
 	}
 
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 }

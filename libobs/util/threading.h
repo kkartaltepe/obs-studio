@@ -51,6 +51,15 @@ static inline void pthread_mutex_init_value(pthread_mutex_t *mutex)
 	*mutex = init_val;
 }
 
+static inline void pthread_rwlock_init_value(pthread_rwlock_t *lock)
+{
+	pthread_rwlock_t init_val = PTHREAD_RWLOCK_INITIALIZER;
+	if (!lock)
+		return;
+
+	*lock = init_val;
+}
+
 static inline int pthread_mutex_init_recursive(pthread_mutex_t *mutex)
 {
 	pthread_mutexattr_t attr;

@@ -959,7 +959,7 @@ static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time,
 	da_clear(video->ready_encoder_groups);
 	pthread_mutex_unlock(&video->encoder_group_mutex);
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		struct obs_core_video_mix *video = obs->video.mixes.array[i];
 		bool raw_active = video->raw_was_active;
@@ -972,7 +972,7 @@ static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time,
 			deque_push_back(&video->vframe_info_buffer_gpu,
 					&vframe_info, sizeof(vframe_info));
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 }
 
 static const char *output_frame_gs_context_name = "gs_context(video->graphics)";
@@ -1033,20 +1033,33 @@ static inline void output_frame(struct obs_core_video_mix *video)
 
 static inline void output_frames(void)
 {
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	DARRAY(size_t) to_remove;
+	da_init(to_remove);
+	pthread_rwlock_rdlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		struct obs_core_video_mix *mix = obs->video.mixes.array[i];
 		if (mix->view) {
 			output_frame(mix);
 		} else {
+			da_push_back(to_remove, &i);
+			/*
 			obs->video.mixes.array[i] = NULL;
 			obs_free_video_mix(mix);
 			da_erase(obs->video.mixes, i);
 			i--;
 			num--;
+			*/
 		}
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
+
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
+	for (size_t i = to_remove.num; i > 0; i--) {
+		da_erase(obs->video.mixes, to_remove.array[i]);
+	}
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
+
+	da_free(to_remove);
 }
 
 #define NBSP "\xC2\xA0"
@@ -1198,21 +1211,21 @@ static inline void update_active_state(struct obs_core_video_mix *video)
 
 static inline void update_active_states(void)
 {
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++)
 		update_active_state(obs->video.mixes.array[i]);
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 }
 
 static inline bool stop_requested(void)
 {
 	bool success = true;
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++)
 		if (!video_output_stopped(obs->video.mixes.array[i]->video))
 			success = false;
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	return success;
 }

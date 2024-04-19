@@ -683,14 +683,14 @@ static int obs_init_video_mix(struct obs_video_info *ovi,
 
 	/* main view graphics thread drives all frame output,
 	 * so share FPS settings for aux views */
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	size_t num = obs->video.mixes.num;
 	if (num && obs->video.main_mix) {
 		struct obs_video_info main_ovi = obs->video.main_mix->ovi;
 		video->ovi.fps_num = main_ovi.fps_num;
 		video->ovi.fps_den = main_ovi.fps_den;
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	video->gpu_conversion = ovi->gpu_conversion;
 	video->gpu_was_active = false;
@@ -748,7 +748,7 @@ static int obs_init_video(struct obs_video_info *ovi)
 		return OBS_VIDEO_FAIL;
 	if (pthread_mutex_init(&video->encoder_group_mutex, NULL) < 0)
 		return OBS_VIDEO_FAIL;
-	if (pthread_mutex_init(&video->mixes_mutex, NULL) < 0)
+	if (pthread_rwlock_init(&video->mixes_rwlock, NULL) < 0)
 		return OBS_VIDEO_FAIL;
 
 	if (!obs_view_add2(&obs->data.main_view, ovi))
@@ -775,10 +775,10 @@ static int obs_init_video(struct obs_video_info *ovi)
 
 static void stop_video(void)
 {
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++)
 		video_output_stop(obs->video.mixes.array[i]->video);
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	struct obs_core_video *video = &obs->video;
 	void *thread_retval;
@@ -869,7 +869,7 @@ void obs_free_video_mix(struct obs_core_video_mix *video)
 
 static void obs_free_video(void)
 {
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	size_t num_views = 0;
 	for (size_t i = 0; i < obs->video.mixes.num; i++) {
 		struct obs_core_video_mix *video = obs->video.mixes.array[i];
@@ -880,10 +880,10 @@ static void obs_free_video(void)
 	}
 	if (num_views > 0)
 		blog(LOG_WARNING, "Number of remaining views: %ld", num_views);
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
-	pthread_mutex_destroy(&obs->video.mixes_mutex);
-	pthread_mutex_init_value(&obs->video.mixes_mutex);
+	pthread_rwlock_destroy(&obs->video.mixes_rwlock);
+	pthread_rwlock_init_value(&obs->video.mixes_rwlock);
 	da_free(obs->video.mixes);
 
 	for (size_t i = 0; i < obs->video.ready_encoder_groups.num; i++) {
@@ -1248,7 +1248,7 @@ static bool obs_init(const char *locale, const char *module_config_path,
 	pthread_mutex_init_value(&obs->audio.task_mutex);
 	pthread_mutex_init_value(&obs->video.task_mutex);
 	pthread_mutex_init_value(&obs->video.encoder_group_mutex);
-	pthread_mutex_init_value(&obs->video.mixes_mutex);
+	pthread_rwlock_init_value(&obs->video.mixes_rwlock);
 
 	obs->name_store_owned = !store;
 	obs->name_store = store ? store : profiler_name_store_create();
@@ -3100,7 +3100,7 @@ struct obs_core_video_mix *get_mix_for_video(video_t *v)
 {
 	struct obs_core_video_mix *result = NULL;
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_rdlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		struct obs_core_video_mix *mix = obs->video.mixes.array[i];
 
@@ -3109,7 +3109,7 @@ struct obs_core_video_mix *get_mix_for_video(video_t *v)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	return result;
 }
@@ -3261,7 +3261,7 @@ bool obs_video_active(void)
 {
 	bool result = false;
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_rdlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		struct obs_core_video_mix *video = obs->video.mixes.array[i];
 
@@ -3271,7 +3271,7 @@ bool obs_video_active(void)
 			break;
 		}
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	return result;
 }

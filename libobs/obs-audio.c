@@ -544,7 +544,7 @@ bool audio_callback(void *param, uint64_t start_ts_in, uint64_t end_ts_in,
 	/* ------------------------------------------------ */
 	/* build audio render order */
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_rdlock(&obs->video.mixes_rwlock);
 	for (size_t j = 0; j < obs->video.mixes.num; j++) {
 		struct obs_view *view = obs->video.mixes.array[j]->view;
 		if (!view)
@@ -569,7 +569,7 @@ bool audio_callback(void *param, uint64_t start_ts_in, uint64_t end_ts_in,
 		}
 		pthread_mutex_unlock(&view->channels_mutex);
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	pthread_mutex_lock(&data->audio_sources_mutex);
 
