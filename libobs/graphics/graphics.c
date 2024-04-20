@@ -1771,6 +1771,7 @@ void gs_copy_texture(gs_texture_t *dst, gs_texture_t *src)
 	if (!gs_valid_p2("gs_copy_texture", dst, src))
 		return;
 
+	PROFILE_START_AUTO("gs_copy_texture");
 	graphics->exports.device_copy_texture(graphics->device, dst, src);
 }
 
@@ -1880,6 +1881,7 @@ void gs_present(void)
 void gs_flush(void)
 {
 	graphics_t *graphics = thread_graphics;
+	PROFILE_START_AUTO("gs_flush");
 
 	if (!gs_valid("gs_flush"))
 		return;
