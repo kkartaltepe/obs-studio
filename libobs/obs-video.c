@@ -969,7 +969,7 @@ static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time,
 static const char *output_frame_gs_context_name = "gs_context(video->graphics)";
 static const char *output_frame_render_video_name = "render_video";
 static const char *output_frame_download_frame_name = "download_frame";
-static const char *output_frame_gs_flush_name = "gs_flush";
+// static const char *output_frame_gs_flush_name = "gs_flush";
 static const char *output_frame_output_video_data_name = "output_video_data";
 static inline void output_frame(struct obs_core_video_mix *video)
 {
@@ -1000,9 +1000,9 @@ static inline void output_frame(struct obs_core_video_mix *video)
 		profile_end(output_frame_download_frame_name);
 	}
 
-	profile_start(output_frame_gs_flush_name);
+	// profile_start(output_frame_gs_flush_name);
 	gs_flush();
-	profile_end(output_frame_gs_flush_name);
+	// profile_end(output_frame_gs_flush_name);
 
 	gs_leave_context();
 	profile_end(output_frame_gs_context_name);
