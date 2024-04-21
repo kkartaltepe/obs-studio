@@ -1313,7 +1313,7 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 	}
 
 	if ((source->info.output_flags & OBS_SOURCE_ASYNC) != 0) {
-		PROFILE_STARTL_HERE("video_tick_sync");
+		PROFILE_STARTL_HERE("video_tick_async");
 		profile_annotate_text(source->info.id);
 		async_tick(source);
 		profile_endL();
@@ -1387,11 +1387,12 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 		profile_endL();
 	}
 
-	PROFILE_STARTL_HERE("video_tick_sync");
-	profile_annotate_text(source->info.id);
-	if (source->context.data && source->info.video_tick)
+	if (source->context.data && source->info.video_tick) {
+		PROFILE_STARTL_HERE("video_tick_sync");
+		profile_annotate_text(source->info.id);
 		source->info.video_tick(source->context.data, seconds);
-	profile_endL();
+		profile_endL();
+	}
 
 	source->async_rendered = false;
 	source->deinterlace_rendered = false;

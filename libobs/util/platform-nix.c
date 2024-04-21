@@ -154,7 +154,7 @@ void get_plugin_info(const char *path, bool *is_obs_plugin, bool *can_load)
 	*is_obs_plugin = true;
 	*can_load = true;
 #if !defined(__APPLE__)
-	*can_load = !has_qt5_dependency(path);
+	// *can_load = !has_qt5_dependency(path);
 #endif
 	UNUSED_PARAMETER(path);
 }
