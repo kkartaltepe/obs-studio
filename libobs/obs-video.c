@@ -346,6 +346,8 @@ static void render_convert_texture(struct obs_core_video_mix *video, gs_texture_
 				   gs_texture_t *texture)
 {
 	profile_start(render_convert_texture_name);
+	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE,
+			      render_convert_texture_name);
 
 	gs_effect_t *effect = obs->video.conversion_effect;
 	gs_eparam_t *color_vec0 = gs_effect_get_param_by_name(effect, "color_vec0");
@@ -401,6 +403,7 @@ static void render_convert_texture(struct obs_core_video_mix *video, gs_texture_
 
 	video->texture_converted = true;
 
+	GS_DEBUG_MARKER_END();
 	profile_end(render_convert_texture_name);
 }
 
@@ -459,6 +462,8 @@ static inline bool queue_frame(struct obs_core_video_mix *video, bool raw_active
 		goto finish;
 	}
 
+	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE,
+			      "queue_frame");
 	struct obs_tex_frame tf;
 	deque_pop_front(&video->gpu_encoder_avail_queue, &tf, sizeof(tf));
 
@@ -501,6 +506,7 @@ static inline bool queue_frame(struct obs_core_video_mix *video, bool raw_active
 	gs_texture_release_sync(tf.tex, ++tf.lock_key);
 #endif
 	deque_push_back(&video->gpu_encoder_queue, &tf, sizeof(tf));
+	GS_DEBUG_MARKER_END();
 
 	os_sem_post(video->gpu_encode_semaphore);
 
@@ -520,6 +526,8 @@ static const char *output_gpu_encoders_name = "output_gpu_encoders";
 static void output_gpu_encoders(struct obs_core_video_mix *video, bool raw_active)
 {
 	profile_start(output_gpu_encoders_name);
+	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE,
+			      output_gpu_encoders_name);
 
 	if (!video->texture_converted)
 		goto end;
@@ -534,6 +542,7 @@ static void output_gpu_encoders(struct obs_core_video_mix *video, bool raw_activ
 	pthread_mutex_unlock(&video->gpu_encoder_mutex);
 
 end:
+	GS_DEBUG_MARKER_END();
 	profile_end(output_gpu_encoders_name);
 }
 
@@ -1103,6 +1112,8 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 {
 	uint64_t frame_start = os_gettime_ns();
 	uint64_t frame_time_ns;
+
+	profiler_frame_mark_auto(NULL);
 
 	update_active_states();
 

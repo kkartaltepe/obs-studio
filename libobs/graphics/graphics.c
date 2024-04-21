@@ -277,7 +277,6 @@ void gs_enter_context(graphics_t *graphics)
 
 void gs_leave_context(void)
 {
-	profile_endL();
 	if (gs_valid("gs_leave_context")) {
 		if (!os_atomic_dec_long(&thread_graphics->ref)) {
 			graphics_t *graphics = thread_graphics;
@@ -288,6 +287,7 @@ void gs_leave_context(void)
 			TracyCLockAfterUnlock(graphics->tracy_mutex);
 		}
 	}
+	profile_endL();
 }
 
 graphics_t *gs_get_context(void)
