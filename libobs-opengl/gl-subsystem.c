@@ -18,6 +18,7 @@
 
 #include <graphics/matrix3.h>
 #include "gl-subsystem.h"
+#include <util/profiler.h>
 
 /* Goofy Windows.h macros need to be removed */
 #ifdef near
@@ -131,6 +132,13 @@ static void gl_enable_debug()
 #else
 static void gl_enable_debug() {}
 #endif
+
+static uint16_t gl_next_zone_slot(struct gs_device *device)
+{
+	uint16_t slot = device->t.qhead;
+	device->t.qhead = (device->t.qhead + 1) % QUERY_COUNT;
+	return slot;
+}
 
 static bool gl_init_extensions(struct gs_device *device)
 {
@@ -253,6 +261,11 @@ int device_create(gs_device_t **p_device, uint32_t adapter)
 	     "OpenGL loaded successfully, version %s, shading "
 	     "language %s",
 	     glVersion, glShadingLanguage);
+
+	glGenQueries(QUERY_COUNT, device->t.queries);
+	int64_t tgpu;
+	glGetInteger64v(GL_TIMESTAMP, &tgpu);
+	profiler_gpu_ctx_new(tgpu);
 
 	gl_enable(GL_CULL_FACE);
 	gl_gen_vertex_arrays(1, &device->empty_vao);
@@ -1014,6 +1027,23 @@ void device_begin_frame(gs_device_t *device)
 {
 	/* does nothing */
 	UNUSED_PARAMETER(device);
+
+	PROFILE_START_AUTO("begin_frame_gather_counters");
+	// Collect perf timestamps.
+	while (device->t.qtail != device->t.qhead) {
+		GLint available;
+		glGetQueryObjectiv(device->t.queries[device->t.qtail],
+				   GL_QUERY_RESULT_AVAILABLE, &available);
+		if (!available) {
+			return;
+		}
+
+		uint64_t gpuTime;
+		glGetQueryObjectui64v(device->t.queries[device->t.qtail],
+				      GL_QUERY_RESULT, &gpuTime);
+		profiler_gpu_time_report(device->t.qtail, gpuTime);
+		device->t.qtail = (device->t.qtail + 1) % QUERY_COUNT;
+	}
 }
 
 void device_begin_scene(gs_device_t *device)
@@ -1496,6 +1526,10 @@ void device_debug_marker_begin(gs_device_t *device, const char *markername,
 	UNUSED_PARAMETER(color);
 
 	glPushDebugGroupKHR(GL_DEBUG_SOURCE_APPLICATION, 0, -1, markername);
+
+	uint16_t id = gl_next_zone_slot(device);
+	glQueryCounter(device->t.queries[id], GL_TIMESTAMP);
+	profiler_gpu_zone_start(markername, id);
 }
 
 void device_debug_marker_end(gs_device_t *device)
@@ -1503,6 +1537,10 @@ void device_debug_marker_end(gs_device_t *device)
 	UNUSED_PARAMETER(device);
 
 	glPopDebugGroupKHR();
+
+	uint16_t id = gl_next_zone_slot(device);
+	glQueryCounter(device->t.queries[id], GL_TIMESTAMP);
+	profiler_gpu_zone_end(id);
 }
 
 void gs_swapchain_destroy(gs_swapchain_t *swapchain)

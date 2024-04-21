@@ -1249,3 +1249,82 @@ uint64_t profiler_snapshot_entry_overall_between_calls_count(
 {
 	return entry ? entry->overall_between_calls_count : 0;
 }
+
+void profiler_frame_mark_auto(const char *name)
+{
+	if (name) {
+		TracyCFrameMarkNamed(name);
+	} else {
+		TracyCFrameMark;
+	}
+}
+void profiler_frame_mark_start(const char *name)
+{
+	TracyCFrameMarkStart(name);
+}
+void profiler_frame_mark_end(const char *name)
+{
+	TracyCFrameMarkEnd(name);
+}
+
+static const char *unknown_str = "unknown";
+void profiler_gpu_zone_start(const char *name, uint16_t tid)
+{
+	if (!thread_enabled)
+		return;
+
+	uint64_t srcloc = ___tracy_alloc_srcloc_name(
+		0, unknown_str, 7, unknown_str, 7, name, strlen(name), 0);
+	struct ___tracy_gpu_zone_begin_data gpuz_data = {
+		srcloc,
+		tid,
+		1,
+	};
+	___tracy_emit_gpu_zone_begin_alloc_serial(gpuz_data);
+}
+
+void profiler_gpu_zone_end(uint16_t tid)
+{
+	if (!thread_enabled)
+		return;
+
+	struct ___tracy_gpu_zone_end_data gpuz_data = {
+		tid,
+		1,
+	};
+	___tracy_emit_gpu_zone_end_serial(gpuz_data);
+}
+
+void profiler_gpu_time_report(uint16_t tid, uint64_t time)
+{
+	if (!thread_enabled)
+		return;
+
+	struct ___tracy_gpu_time_data gpuz_data = {
+		(int64_t)time,
+		tid,
+		1,
+	};
+	___tracy_emit_gpu_time_serial(gpuz_data);
+}
+
+void profiler_gpu_ctx_new(int64_t gpu_time)
+{
+	// Copied from Tracy
+	enum GpuContextType : uint8_t {
+		Tracy_Invalid,
+		Tracy_OpenGl,
+		Tracy_Vulkan,
+		Tracy_OpenCL,
+		Tracy_Direct3D12,
+		Tracy_Direct3D11
+	};
+	const struct ___tracy_gpu_new_context_data ctx_data = {
+		gpu_time,
+		1.f,
+		1, //context
+		0, //flags
+		Tracy_Vulkan,
+	};
+	___tracy_emit_gpu_new_context_serial(ctx_data);
+}

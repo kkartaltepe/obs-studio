@@ -867,7 +867,7 @@ EXPORT bool gs_texture_create_p010(gs_texture_t **tex_y, gs_texture_t **tex_uv,
 
 EXPORT bool gs_is_monitor_hdr(void *monitor);
 
-#define GS_USE_DEBUG_MARKERS 0
+#define GS_USE_DEBUG_MARKERS 1
 #if GS_USE_DEBUG_MARKERS
 static const float GS_DEBUG_COLOR_DEFAULT[] = {0.5f, 0.5f, 0.5f, 1.0f};
 static const float GS_DEBUG_COLOR_RENDER_VIDEO[] = {0.0f, 0.5f, 0.0f, 1.0f};

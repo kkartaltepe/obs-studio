@@ -635,6 +635,13 @@ static inline void fbo_info_destroy(struct fbo_info *fbo)
 	}
 }
 
+#define QUERY_COUNT (64 * 1024)
+
+struct tracy_data {
+	GLuint queries[QUERY_COUNT];
+	size_t qhead, qtail;
+};
+
 struct gs_device {
 	struct gl_platform *plat;
 	enum copy_type copy_type;
@@ -667,6 +674,7 @@ struct gs_device {
 	DARRAY(struct matrix4) proj_stack;
 
 	struct fbo_info *cur_fbo;
+	struct tracy_data t;
 };
 
 extern struct fbo_info *get_fbo(gs_texture_t *tex, uint32_t width,

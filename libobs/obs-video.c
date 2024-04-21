@@ -1213,6 +1213,8 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 	uint64_t frame_start = os_gettime_ns();
 	uint64_t frame_time_ns;
 
+	profiler_frame_mark_auto(NULL);
+
 	update_active_states();
 
 	profile_start(context->video_thread_name);
