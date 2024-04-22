@@ -746,6 +746,8 @@ EXPORT void gs_clear(uint32_t clear_flags, const struct vec4 *color,
 EXPORT bool gs_is_present_ready(void);
 EXPORT void gs_present(void);
 EXPORT void gs_flush(void);
+EXPORT bool gs_is_present_async_ready(graphics_t *g);
+EXPORT void gs_present_async(graphics_t *g, gs_swapchain_t *swapchain);
 
 EXPORT void gs_set_cull_mode(enum gs_cull_mode mode);
 EXPORT enum gs_cull_mode gs_get_cull_mode(void);

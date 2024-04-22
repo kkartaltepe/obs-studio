@@ -279,7 +279,7 @@ void render_display(struct obs_display *display)
 
 		GS_DEBUG_MARKER_END();
 
-		gs_present();
+		// gs_present();
 	}
 }
 

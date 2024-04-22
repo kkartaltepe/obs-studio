@@ -90,6 +90,7 @@ struct gl_platform {
 	EGLDisplay display;
 	EGLConfig config;
 	EGLContext context;
+	EGLContext present_context;
 };
 
 struct gl_windowinfo *
@@ -121,7 +122,8 @@ static bool egl_make_current(EGLDisplay display, EGLSurface surface,
 	}
 
 	if (!eglMakeCurrent(display, surface, surface, context)) {
-		blog(LOG_ERROR, "eglMakeCurrent failed");
+		blog(LOG_ERROR, "eglMakeCurrent failed %s",
+		     gl_egl_error_to_string(eglGetError()));
 		return false;
 	}
 
@@ -152,10 +154,17 @@ static bool egl_context_create(struct gl_platform *plat, const EGLint *attribs)
 		}
 	}
 
+	plat->present_context = eglCreateContext(plat->display, plat->config,
+						 EGL_NO_CONTEXT, attribs);
+	if (plat->present_context == EGL_NO_CONTEXT) {
+		blog(LOG_ERROR, "eglCreateContext failed for present context");
+		goto error;
+	}
 	plat->context = eglCreateContext(plat->display, plat->config,
-					 EGL_NO_CONTEXT, attribs);
+					 plat->present_context, attribs);
 	if (plat->context == EGL_NO_CONTEXT) {
 		blog(LOG_ERROR, "eglCreateContext failed");
+		eglDestroyContext(plat->display, plat->present_context);
 		goto error;
 	}
 
@@ -170,6 +179,7 @@ static void egl_context_destroy(struct gl_platform *plat)
 {
 	egl_make_current(plat->display, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 	eglDestroyContext(plat->display, plat->context);
+	eglDestroyContext(plat->display, plat->present_context);
 }
 
 static bool extension_supported(const char *extensions, const char *search)
@@ -340,6 +350,20 @@ static void gl_wayland_egl_device_load_swapchain(gs_device_t *device,
 	}
 }
 
+static void gl_wayland_egl_device_present_async(gs_device_t *device,
+						struct gl_windowinfo *wi)
+{
+	struct gl_platform *plat = device->plat;
+	egl_make_current(plat->display, wi->egl_surface, plat->present_context);
+	if (eglSwapInterval(plat->display, 0) == EGL_FALSE) {
+		blog(LOG_ERROR, "eglSwapInterval failed");
+	}
+	if (eglSwapBuffers(plat->display, wi->egl_surface) == EGL_FALSE) {
+		blog(LOG_ERROR, "eglSwapBuffers failed");
+	}
+	egl_make_current(plat->display, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+}
+
 static void gl_wayland_egl_device_present(gs_device_t *device)
 {
 	struct gl_platform *plat = device->plat;
@@ -423,6 +447,7 @@ static const struct gl_winsys_vtable egl_wayland_winsys_vtable = {
 	.update = gl_wayland_egl_update,
 	.device_load_swapchain = gl_wayland_egl_device_load_swapchain,
 	.device_present = gl_wayland_egl_device_present,
+	.device_present_async = gl_wayland_egl_device_present_async,
 	.device_texture_create_from_dmabuf =
 		gl_wayland_egl_device_texture_create_from_dmabuf,
 	.device_query_dmabuf_capabilities =

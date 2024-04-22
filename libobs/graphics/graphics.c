@@ -1984,6 +1984,15 @@ void gs_present(void)
 	graphics->exports.device_present(graphics->device);
 }
 
+bool gs_is_present_async_ready(graphics_t *g) {
+	PROFILE_START_AUTO("wait_present_async_ready");
+	return g->exports.device_is_present_async_ready(g->device);
+}
+
+void gs_present_async(graphics_t *g, gs_swapchain_t *swapchain) {
+	g->exports.device_present_async(g->device, swapchain);
+}
+
 void gs_flush(void)
 {
 	graphics_t *graphics = thread_graphics;

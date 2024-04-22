@@ -135,6 +135,41 @@ extern bool device_is_present_ready(gs_device_t *device)
 	return true;
 }
 
+// Stall for now. Probe later?
+extern bool device_is_present_async_ready(gs_device_t *device)
+{
+	os_task_queue_wait(device->present_queue);
+	return true;
+}
+
+
+struct present_info {
+	gs_device_t *device;
+	struct gl_windowinfo *wi;
+};
+
+// Async present hack.
+static void present_task(void *param) {
+	PROFILE_START_AUTO("async_present_task");
+	struct present_info *p = param;
+	gs_device_t *device = p->device;
+	struct gl_windowinfo *wi = p->wi;
+	gl_vtable->device_present_async(device, wi);
+	bfree(p);
+}
+
+extern void device_present_async(gs_device_t *device, gs_swapchain_t *swap) {
+	struct present_info *p = bzalloc(sizeof(struct present_info));
+	p->device = device;
+	p->wi = swap->wi;
+	// Double check?
+	if (os_task_queue_wait(device->present_queue)) {
+		blog(LOG_ERROR, "BUG: queue was not empty when present_async was called");
+	}
+	os_task_queue_queue_task(device->present_queue, (os_task_t)present_task, p);
+
+}
+
 extern void device_present(gs_device_t *device)
 {
 	gl_vtable->device_present(device);

@@ -137,6 +137,8 @@ struct gs_exports {
 			     uint8_t stencil);
 	bool (*device_is_present_ready)(gs_device_t *device);
 	void (*device_present)(gs_device_t *device);
+	bool (*device_is_present_async_ready)(gs_device_t *device);
+	void (*device_present_async)(gs_device_t *device, gs_swapchain_t *swapchain);
 	void (*device_flush)(gs_device_t *device);
 	void (*device_set_cull_mode)(gs_device_t *device,
 				     enum gs_cull_mode mode);

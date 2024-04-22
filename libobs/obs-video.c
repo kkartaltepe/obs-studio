@@ -97,6 +97,11 @@ static inline void render_displays(void)
 	if (!obs->data.valid)
 		return;
 
+	// Actually just a wait for any prior presents to complete.
+	const bool ready = gs_is_present_async_ready(obs->video.graphics);
+	if (!ready)
+		return;
+
 	gs_enter_context(obs->video.graphics);
 
 	/* render extra displays/swaps */
@@ -111,6 +116,16 @@ static inline void render_displays(void)
 	pthread_mutex_unlock(&obs->data.displays_mutex);
 
 	gs_leave_context();
+
+	/* present extra displays/swaps */
+	pthread_mutex_lock(&obs->data.displays_mutex);
+	display = obs->data.first_display;
+	while (ready && display) {
+		// render_display(display);
+		gs_present_async(obs->video.graphics, display->swap);
+		display = display->next;
+	}
+	pthread_mutex_unlock(&obs->data.displays_mutex);
 }
 
 static inline void set_render_size(uint32_t width, uint32_t height)
@@ -506,8 +521,7 @@ static inline bool queue_frame(struct obs_core_video_mix *video,
 		goto finish;
 	}
 
-	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE,
-			      "queue_frame");
+	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE, "queue_frame");
 	struct obs_tex_frame tf;
 	deque_pop_front(&video->gpu_encoder_avail_queue, &tf, sizeof(tf));
 

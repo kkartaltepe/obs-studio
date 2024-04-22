@@ -19,6 +19,7 @@
 
 #include <util/darray.h>
 #include <util/threading.h>
+#include <util/task.h>
 #include <graphics/graphics.h>
 #include <graphics/device-exports.h>
 #include <graphics/matrix4.h>
@@ -675,6 +676,7 @@ struct gs_device {
 
 	struct fbo_info *cur_fbo;
 	struct tracy_data t;
+	os_task_queue_t *present_queue;
 };
 
 extern struct fbo_info *get_fbo(gs_texture_t *tex, uint32_t width,

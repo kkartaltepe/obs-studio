@@ -136,6 +136,9 @@ EXPORT void device_clear(gs_device_t *device, uint32_t clear_flags,
 			 uint8_t stencil);
 EXPORT bool device_is_present_ready(gs_device_t *device);
 EXPORT void device_present(gs_device_t *device);
+EXPORT bool device_is_present_async_ready(gs_device_t *device);
+EXPORT void device_present_async(gs_device_t *device,
+				 gs_swapchain_t *swapchain);
 EXPORT void device_flush(gs_device_t *device);
 EXPORT void device_set_cull_mode(gs_device_t *device, enum gs_cull_mode mode);
 EXPORT enum gs_cull_mode device_get_cull_mode(const gs_device_t *device);

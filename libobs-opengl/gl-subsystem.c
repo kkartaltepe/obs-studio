@@ -234,6 +234,9 @@ int device_create(gs_device_t **p_device, uint32_t adapter)
 {
 	struct gs_device *device = bzalloc(sizeof(struct gs_device));
 	int errorcode = GS_ERROR_FAIL;
+	device->present_queue = os_task_queue_create();
+	if(!device->present_queue)
+		goto fail;
 
 	blog(LOG_INFO, "---------------------------------");
 	blog(LOG_INFO, "Initializing OpenGL...");
@@ -312,6 +315,8 @@ void device_destroy(gs_device_t *device)
 		gl_delete_vertex_arrays(1, &device->empty_vao);
 
 		da_free(device->proj_stack);
+		os_task_queue_wait(device->present_queue);
+		os_task_queue_destroy(device->present_queue);
 		gl_platform_destroy(device->plat);
 		bfree(device);
 	}
