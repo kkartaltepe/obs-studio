@@ -49,6 +49,7 @@ struct gl_winsys_vtable {
 	void (*device_load_swapchain)(gs_device_t *device, gs_swapchain_t *swap);
 
 	void (*device_present)(gs_device_t *device);
+	void (*device_present_async)(gs_device_t *device, struct gl_windowinfo *wi);
 
 	struct gs_texture *(*device_texture_create_from_dmabuf)(gs_device_t *device, unsigned int width,
 								unsigned int height, uint32_t drm_format,
