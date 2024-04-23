@@ -1947,6 +1947,7 @@ void gs_load_swapchain(gs_swapchain_t *swapchain)
 	if (!gs_valid("gs_load_swapchain"))
 		return;
 
+	PROFILE_START_AUTO("gs_load_swapchain");
 	graphics->exports.device_load_swapchain(graphics->device, swapchain);
 }
 
