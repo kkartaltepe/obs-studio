@@ -48,3 +48,9 @@ build-aux/flatpak-github-action-modified-*
 
 # Exclude CMake build number cache
 /cmake/.CMakeBuildNumber
+deps/cef_binary_4638_linux64/*
+deps/tracy/*
+
+*/*.sln
+*/*.vcxproj
+*/*.vcxproj.filters
