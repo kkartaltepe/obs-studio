@@ -24,6 +24,7 @@
 
 #include <qt-wrappers.hpp>
 #include <slider-ignorewheel.hpp>
+#include <util/profiler.hpp>
 
 #include <QToolTip>
 #include <QWidgetAction>

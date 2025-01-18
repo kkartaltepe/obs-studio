@@ -22,6 +22,7 @@
 #include "graphics.h"
 #include "matrix3.h"
 #include "matrix4.h"
+#include <tracy/TracyC.h>
 
 struct gs_exports {
 	const char *(*device_get_name)(void);
@@ -96,6 +97,8 @@ struct gs_exports {
 			     uint8_t stencil);
 	bool (*device_is_present_ready)(gs_device_t *device);
 	void (*device_present)(gs_device_t *device);
+	bool (*device_is_present_async_ready)(gs_device_t *device);
+	void (*device_present_async)(gs_device_t *device, gs_swapchain_t *swapchain);
 	void (*device_flush)(gs_device_t *device);
 	void (*device_set_cull_mode)(gs_device_t *device, enum gs_cull_mode mode);
 	enum gs_cull_mode (*device_get_cull_mode)(const gs_device_t *device);
@@ -311,6 +314,7 @@ struct graphics_subsystem {
 	pthread_mutex_t effect_mutex;
 	struct gs_effect *first_effect;
 
+	TracyCLockCtx tracy_mutex;
 	pthread_mutex_t mutex;
 	volatile long ref;
 

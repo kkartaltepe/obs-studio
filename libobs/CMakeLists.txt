@@ -3,8 +3,8 @@ cmake_minimum_required(VERSION 3.28...3.30)
 include(cmake/obs-version.cmake)
 
 if(OS_WINDOWS AND NOT OBS_PARENT_ARCHITECTURE STREQUAL CMAKE_VS_PLATFORM_NAME)
-  include(cmake/os-windows.cmake)
-  return()
+include(cmake/os-windows.cmake)
+return()
 endif()
 
 find_package(Threads REQUIRED)
@@ -15,19 +15,22 @@ find_package(ZLIB REQUIRED)
 find_package(Uthash REQUIRED)
 
 if(ENABLE_UI)
-  find_package(Qt6 REQUIRED Core)
+find_package(Qt6 REQUIRED Core)
 endif()
 
 find_package(jansson REQUIRED)
 if(NOT TARGET OBS::caption)
-  add_subdirectory("${CMAKE_SOURCE_DIR}/deps/libcaption" "${CMAKE_BINARY_DIR}/deps/libcaption")
+add_subdirectory("${CMAKE_SOURCE_DIR}/deps/libcaption" "${CMAKE_BINARY_DIR}/deps/libcaption")
+endif()
+if(NOT TARGET Tracy::TracyClient)
+add_subdirectory("${CMAKE_SOURCE_DIR}/deps/tracy" "${CMAKE_BINARY_DIR}/deps/tracy")
 endif()
 
 add_library(libobs SHARED)
 add_library(OBS::libobs ALIAS libobs)
 
 target_sources(
-  libobs
+libobs
   PRIVATE
     $<$<BOOL:${ENABLE_HEVC}>:obs-hevc.c>
     $<$<BOOL:${ENABLE_HEVC}>:obs-hevc.h>

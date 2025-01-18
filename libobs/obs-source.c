@@ -1217,17 +1217,29 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 	if (!obs_source_valid(source, "obs_source_video_tick"))
 		return;
 
-	if (source->info.type == OBS_SOURCE_TYPE_TRANSITION)
+	if (source->info.type == OBS_SOURCE_TYPE_TRANSITION) {
+		PROFILE_STARTL_HERE("video_tick_transition");
+		profile_annotate_text(source->info.id);
 		obs_transition_tick(source, seconds);
+		profile_endL();
+	}
 
-	if ((source->info.output_flags & OBS_SOURCE_ASYNC) != 0)
+	if ((source->info.output_flags & OBS_SOURCE_ASYNC) != 0) {
+		PROFILE_STARTL_HERE("video_tick_async");
+		profile_annotate_text(source->info.id);
 		async_tick(source);
+		profile_endL();
+	}
 
 	if ((source->info.output_flags & OBS_SOURCE_CONTROLLABLE_MEDIA) != 0)
 		process_media_actions(source);
 
-	if (os_atomic_load_long(&source->defer_update_count) > 0)
+	if (os_atomic_load_long(&source->defer_update_count) > 0) {
+		PROFILE_STARTL_HERE("video_tick_defer_update");
+		profile_annotate_text(source->info.id);
 		obs_source_deferred_update(source);
+		profile_endL();
+	}
 
 	/* reset the filter render texture information once every frame */
 	if (source->filter_texrender)
@@ -1236,6 +1248,8 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 	/* call show/hide if the reference changed */
 	now_showing = !!source->show_refs;
 	if (now_showing != source->showing) {
+		PROFILE_STARTL_HERE("video_tick_show/hide");
+		profile_annotate_text(source->info.id);
 		if (now_showing) {
 			show_source(source);
 		} else {
@@ -1254,11 +1268,14 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 		}
 
 		source->showing = now_showing;
+		profile_endL();
 	}
 
 	/* call activate/deactivate if the reference changed */
 	now_active = !!source->activate_refs;
 	if (now_active != source->active) {
+		PROFILE_STARTL_HERE("video_tick_de/activate");
+		profile_annotate_text(source->info.id);
 		if (now_active) {
 			activate_source(source);
 		} else {
@@ -1277,10 +1294,15 @@ void obs_source_video_tick(obs_source_t *source, float seconds)
 		}
 
 		source->active = now_active;
+		profile_endL();
 	}
 
-	if (source->context.data && source->info.video_tick)
+	if (source->context.data && source->info.video_tick) {
+		PROFILE_STARTL_HERE("video_tick_sync");
+		profile_annotate_text(source->info.id);
 		source->info.video_tick(source->context.data, seconds);
+		profile_endL();
+	}
 
 	source->async_rendered = false;
 	source->deinterlace_rendered = false;

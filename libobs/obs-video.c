@@ -60,6 +60,8 @@ static uint64_t tick_sources(uint64_t cur_time, uint64_t last_time)
 
 	da_clear(data->sources_to_tick);
 
+	static const char *profile_get_sources = "get_sources";
+	profile_start(profile_get_sources);
 	pthread_mutex_lock(&data->sources_mutex);
 
 	source = data->sources;
@@ -71,6 +73,7 @@ static uint64_t tick_sources(uint64_t cur_time, uint64_t last_time)
 	}
 
 	pthread_mutex_unlock(&data->sources_mutex);
+	profile_end(profile_get_sources);
 
 	/* ------------------------------------- */
 	/* call the tick function of each source */
@@ -96,6 +99,11 @@ static inline void render_displays(void)
 	if (!obs->data.valid)
 		return;
 
+	// Actually just a wait for any prior presents to complete.
+	const bool ready = gs_is_present_async_ready(obs->video.graphics);
+	if (!ready)
+		return;
+
 	gs_enter_context(obs->video.graphics);
 
 	/* render extra displays/swaps */
@@ -110,6 +118,16 @@ static inline void render_displays(void)
 	pthread_mutex_unlock(&obs->data.displays_mutex);
 
 	gs_leave_context();
+
+	/* present extra displays/swaps */
+	pthread_mutex_lock(&obs->data.displays_mutex);
+	display = obs->data.first_display;
+	while (ready && display) {
+		// render_display(display);
+		gs_present_async(obs->video.graphics, display->swap);
+		display = display->next;
+	}
+	pthread_mutex_unlock(&obs->data.displays_mutex);
 }
 
 static inline void set_render_size(uint32_t width, uint32_t height)
@@ -343,6 +361,8 @@ static void render_convert_texture(struct obs_core_video_mix *video, gs_texture_
 				   gs_texture_t *texture)
 {
 	profile_start(render_convert_texture_name);
+	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE,
+			      render_convert_texture_name);
 
 	gs_effect_t *effect = obs->video.conversion_effect;
 	gs_eparam_t *color_vec0 = gs_effect_get_param_by_name(effect, "color_vec0");
@@ -398,6 +418,7 @@ static void render_convert_texture(struct obs_core_video_mix *video, gs_texture_
 
 	video->texture_converted = true;
 
+	GS_DEBUG_MARKER_END();
 	profile_end(render_convert_texture_name);
 }
 
@@ -456,6 +477,7 @@ static inline bool queue_frame(struct obs_core_video_mix *video, bool raw_active
 		goto finish;
 	}
 
+	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE, "queue_frame");
 	struct obs_tex_frame tf;
 	deque_pop_front(&video->gpu_encoder_avail_queue, &tf, sizeof(tf));
 
@@ -498,6 +520,7 @@ static inline bool queue_frame(struct obs_core_video_mix *video, bool raw_active
 	gs_texture_release_sync(tf.tex, ++tf.lock_key);
 #endif
 	deque_push_back(&video->gpu_encoder_queue, &tf, sizeof(tf));
+	GS_DEBUG_MARKER_END();
 
 	os_sem_post(video->gpu_encode_semaphore);
 
@@ -517,6 +540,8 @@ static const char *output_gpu_encoders_name = "output_gpu_encoders";
 static void output_gpu_encoders(struct obs_core_video_mix *video, bool raw_active)
 {
 	profile_start(output_gpu_encoders_name);
+	GS_DEBUG_MARKER_BEGIN(GS_DEBUG_COLOR_MAIN_TEXTURE,
+			      output_gpu_encoders_name);
 
 	if (!video->texture_converted)
 		goto end;
@@ -531,6 +556,7 @@ static void output_gpu_encoders(struct obs_core_video_mix *video, bool raw_activ
 	pthread_mutex_unlock(&video->gpu_encoder_mutex);
 
 end:
+	GS_DEBUG_MARKER_END();
 	profile_end(output_gpu_encoders_name);
 }
 
@@ -556,7 +582,6 @@ static inline void render_video(struct obs_core_video_mix *video, bool raw_activ
 			copy_surfaces = video->copy_surfaces_encode;
 			channel_count = 1;
 #endif
-			gs_flush();
 		}
 
 		if (video->gpu_conversion) {
@@ -564,7 +589,6 @@ static inline void render_video(struct obs_core_video_mix *video, bool raw_activ
 		}
 
 		if (gpu_active) {
-			gs_flush();
 			output_gpu_encoders(video, raw_active);
 		}
 
@@ -618,6 +642,7 @@ static const uint8_t *set_gpu_converted_plane(uint32_t width, uint32_t height, u
 static void set_gpu_converted_data(struct video_frame *output, const struct video_data *input,
 				   const struct video_output_info *info)
 {
+	PROFILE_START_AUTO("set_gpu_converted_data");
 	switch (info->format) {
 	case VIDEO_FORMAT_I420: {
 		const uint32_t width = info->width;
@@ -760,6 +785,7 @@ static inline void copy_rgbx_frame(struct video_frame *output, const struct vide
 {
 	uint8_t *in_ptr = input->data[0];
 	uint8_t *out_ptr = output->data[0];
+	PROFILE_START_AUTO("copy_rgbx_frame");
 
 	/* if the line sizes match, do a single copy */
 	if (input->linesize[0] == output->linesize[0]) {
@@ -846,7 +872,7 @@ static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time, u
 	da_clear(video->ready_encoder_groups);
 	pthread_mutex_unlock(&video->encoder_group_mutex);
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		struct obs_core_video_mix *video = obs->video.mixes.array[i];
 		bool raw_active = video->raw_was_active;
@@ -857,13 +883,13 @@ static inline void video_sleep(struct obs_core_video *video, uint64_t *p_time, u
 		if (gpu_active)
 			deque_push_back(&video->vframe_info_buffer_gpu, &vframe_info, sizeof(vframe_info));
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 }
 
 static const char *output_frame_gs_context_name = "gs_context(video->graphics)";
 static const char *output_frame_render_video_name = "render_video";
 static const char *output_frame_download_frame_name = "download_frame";
-static const char *output_frame_gs_flush_name = "gs_flush";
+// static const char *output_frame_gs_flush_name = "gs_flush";
 static const char *output_frame_output_video_data_name = "output_video_data";
 static inline void output_frame(struct obs_core_video_mix *video)
 {
@@ -892,9 +918,9 @@ static inline void output_frame(struct obs_core_video_mix *video)
 		profile_end(output_frame_download_frame_name);
 	}
 
-	profile_start(output_frame_gs_flush_name);
+	// profile_start(output_frame_gs_flush_name);
 	gs_flush();
-	profile_end(output_frame_gs_flush_name);
+	// profile_end(output_frame_gs_flush_name);
 
 	gs_leave_context();
 	profile_end(output_frame_gs_context_name);
@@ -915,20 +941,33 @@ static inline void output_frame(struct obs_core_video_mix *video)
 
 static inline void output_frames(void)
 {
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	DARRAY(size_t) to_remove;
+	da_init(to_remove);
+	pthread_rwlock_rdlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++) {
 		struct obs_core_video_mix *mix = obs->video.mixes.array[i];
 		if (mix->view) {
 			output_frame(mix);
 		} else {
+			da_push_back(to_remove, &i);
+			/*
 			obs->video.mixes.array[i] = NULL;
 			obs_free_video_mix(mix);
 			da_erase(obs->video.mixes, i);
 			i--;
 			num--;
+			*/
 		}
 	}
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
+
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
+	for (size_t i = to_remove.num; i > 0; i--) {
+		da_erase(obs->video.mixes, to_remove.array[i]);
+	}
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
+
+	da_free(to_remove);
 }
 
 #define NBSP "\xC2\xA0"
@@ -1075,21 +1114,21 @@ static inline void update_active_state(struct obs_core_video_mix *video)
 
 static inline void update_active_states(void)
 {
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++)
 		update_active_state(obs->video.mixes.array[i]);
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 }
 
 static inline bool stop_requested(void)
 {
 	bool success = true;
 
-	pthread_mutex_lock(&obs->video.mixes_mutex);
+	pthread_rwlock_wrlock(&obs->video.mixes_rwlock);
 	for (size_t i = 0, num = obs->video.mixes.num; i < num; i++)
 		if (!video_output_stopped(obs->video.mixes.array[i]->video))
 			success = false;
-	pthread_mutex_unlock(&obs->video.mixes_mutex);
+	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
 	return success;
 }
@@ -1099,14 +1138,19 @@ bool obs_graphics_thread_loop(struct obs_graphics_context *context)
 	uint64_t frame_start = os_gettime_ns();
 	uint64_t frame_time_ns;
 
+	profiler_frame_mark_auto(NULL);
+
 	update_active_states();
 
 	profile_start(context->video_thread_name);
 	source_profiler_frame_begin();
 
+	static const char *profile_begin_frame = "gs_begin_frame";
+	profile_start(profile_begin_frame);
 	gs_enter_context(obs->video.graphics);
 	gs_begin_frame();
 	gs_leave_context();
+	profile_end(profile_begin_frame);
 
 	profile_start(tick_sources_name);
 	context->last_time = tick_sources(obs->video.video_time, context->last_time);

@@ -19,6 +19,7 @@
 
 #include <util/darray.h>
 #include <util/threading.h>
+#include <util/task.h>
 #include <graphics/graphics.h>
 #include <graphics/device-exports.h>
 #include <graphics/matrix4.h>
@@ -624,6 +625,13 @@ static inline void fbo_info_destroy(struct fbo_info *fbo)
 	}
 }
 
+#define QUERY_COUNT (64 * 1024)
+
+struct tracy_data {
+	GLuint queries[QUERY_COUNT];
+	size_t qhead, qtail;
+};
+
 struct gs_device {
 	struct gl_platform *plat;
 	enum copy_type copy_type;
@@ -656,6 +664,8 @@ struct gs_device {
 	DARRAY(struct matrix4) proj_stack;
 
 	struct fbo_info *cur_fbo;
+	struct tracy_data t;
+	os_task_queue_t *present_queue;
 };
 
 typedef void *gs_sync;

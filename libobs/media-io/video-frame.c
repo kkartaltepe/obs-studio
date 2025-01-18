@@ -16,6 +16,7 @@
 ******************************************************************************/
 #include <assert.h>
 #include "video-frame.h"
+#include "util/profiler.h"
 
 #define HALF(size) ((size + 1) / 2)
 #define ALIGN(size, alignment) *size = (*size + alignment - 1) & (~(alignment - 1));
@@ -194,6 +195,7 @@ void video_frame_init(struct video_frame *frame, enum video_format format, uint3
 	uint32_t heights[MAX_AV_PLANES];
 	size_t offsets[MAX_AV_PLANES];
 	int alignment = base_get_alignment();
+	PROFILE_START_AUTO("video_frame_init");
 
 	if (!frame)
 		return;

@@ -17,6 +17,7 @@
 
 #include <assert.h>
 #include <inttypes.h>
+#include <tracy/TracyC.h>
 #include "../util/bmem.h"
 #include "../util/platform.h"
 #include "../util/profiler.h"
@@ -71,6 +72,7 @@ struct video_output {
 	struct video_output_info info;
 
 	pthread_t thread;
+	TracyCLockCtx tracy_mutex;
 	pthread_mutex_t data_mutex;
 	bool stop;
 
@@ -131,11 +133,14 @@ static inline bool video_output_cur_frame(struct video_output *video)
 
 	/* -------------------------------- */
 
+	TracyCLockBeforeLock(video->tracy_mutex);
 	pthread_mutex_lock(&video->data_mutex);
+	TracyCLockAfterLock(video->tracy_mutex);
 
 	frame_info = &video->cache[video->first_added];
 
 	pthread_mutex_unlock(&video->data_mutex);
+	TracyCLockAfterUnlock(video->tracy_mutex);
 
 	/* -------------------------------- */
 
@@ -163,7 +168,9 @@ static inline bool video_output_cur_frame(struct video_output *video)
 
 	/* -------------------------------- */
 
+	TracyCLockBeforeLock(video->tracy_mutex);
 	pthread_mutex_lock(&video->data_mutex);
+	TracyCLockAfterLock(video->tracy_mutex);
 
 	frame_info->frame.timestamp += video->frame_time;
 	complete = --frame_info->count == 0;
@@ -181,6 +188,7 @@ static inline bool video_output_cur_frame(struct video_output *video)
 	}
 
 	pthread_mutex_unlock(&video->data_mutex);
+	TracyCLockAfterUnlock(video->tracy_mutex);
 
 	/* -------------------------------- */
 
@@ -252,6 +260,8 @@ int video_output_open(video_t **video, struct video_output_info *info)
 
 	if (pthread_mutex_init_recursive(&out->data_mutex) != 0)
 		goto fail0;
+	TracyCLockAnnounce(out->tracy_mutex);
+	TracyCLockCustomName(out->tracy_mutex, "data_mutex", strlen("data_mutex"));
 	if (pthread_mutex_init_recursive(&out->input_mutex) != 0)
 		goto fail1;
 	if (os_sem_init(&out->update_semaphore, 0) != 0)
@@ -270,6 +280,7 @@ fail2:
 	pthread_mutex_destroy(&out->input_mutex);
 fail1:
 	pthread_mutex_destroy(&out->data_mutex);
+	TracyCLockTerminate(out->tracy_mutex);
 fail0:
 	bfree(out);
 	return VIDEO_OUTPUT_FAIL;
@@ -294,6 +305,7 @@ void video_output_close(video_t *video)
 	pthread_mutex_unlock(&video->input_mutex);
 	os_sem_destroy(video->update_semaphore);
 	pthread_mutex_destroy(&video->data_mutex);
+	TracyCLockTerminate(video->tracy_mutex);
 	pthread_mutex_destroy(&video->input_mutex);
 
 	bfree(video);
@@ -507,9 +519,12 @@ bool video_output_lock_frame(video_t *video, struct video_frame *frame, int coun
 	if (!video)
 		return false;
 
+	PROFILE_START_AUTO("video_output_lock_frame");
 	video = get_root(video);
 
+	TracyCLockBeforeLock(video->tracy_mutex);
 	pthread_mutex_lock(&video->data_mutex);
+	TracyCLockAfterLock(video->tracy_mutex);
 
 	if (video->available_frames == 0) {
 		video->cache[video->last_added].count += count;
@@ -533,6 +548,7 @@ bool video_output_lock_frame(video_t *video, struct video_frame *frame, int coun
 	}
 
 	pthread_mutex_unlock(&video->data_mutex);
+	TracyCLockAfterUnlock(video->tracy_mutex);
 
 	return locked;
 }
@@ -544,12 +560,15 @@ void video_output_unlock_frame(video_t *video)
 
 	video = get_root(video);
 
+	TracyCLockBeforeLock(video->tracy_mutex);
 	pthread_mutex_lock(&video->data_mutex);
+	TracyCLockAfterLock(video->tracy_mutex);
 
 	video->available_frames--;
 	os_sem_post(video->update_semaphore);
 
 	pthread_mutex_unlock(&video->data_mutex);
+	TracyCLockAfterUnlock(video->tracy_mutex);
 }
 
 uint64_t video_output_get_frame_time(const video_t *video)

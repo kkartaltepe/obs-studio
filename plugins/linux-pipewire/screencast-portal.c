@@ -20,6 +20,7 @@
 
 #include "pipewire.h"
 #include "portal.h"
+#include <util/profiler.h>
 
 #include <gio/gunixfdlist.h>
 
@@ -666,6 +667,7 @@ static uint32_t screencast_portal_capture_get_height(void *data)
 static void screencast_portal_capture_video_render(void *data, gs_effect_t *effect)
 {
 	struct screencast_portal_capture *capture = data;
+	PROFILE_START_AUTO("screencast_render");
 
 	if (capture->obs_pw_stream)
 		obs_pipewire_stream_video_render(capture->obs_pw_stream, effect);

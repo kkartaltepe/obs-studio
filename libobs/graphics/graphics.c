@@ -20,6 +20,7 @@
 #include "../util/base.h"
 #include "../util/bmem.h"
 #include "../util/platform.h"
+#include "../util/profiler.h"
 #include "graphics-internal.h"
 #include "vec2.h"
 #include "vec3.h"
@@ -27,6 +28,7 @@
 #include "axisang.h"
 #include "effect-parser.h"
 #include "effect.h"
+#include <tracy/TracyC.h>
 
 #ifdef near
 #undef near
@@ -151,6 +153,8 @@ static bool graphics_init(struct graphics_subsystem *graphics)
 		return false;
 	if (pthread_mutex_init(&graphics->mutex, NULL) != 0)
 		return false;
+	TracyCLockAnnounce(graphics->tracy_mutex);
+	TracyCLockCustomName(graphics->tracy_mutex, "graphics_mutex", strlen("graphics_mutex"));
 	if (pthread_mutex_init(&graphics->effect_mutex, NULL) != 0)
 		return false;
 
@@ -235,6 +239,7 @@ void gs_destroy(graphics_t *graphics)
 	}
 
 	pthread_mutex_destroy(&graphics->mutex);
+	TracyCLockTerminate(graphics->tracy_mutex);
 	pthread_mutex_destroy(&graphics->effect_mutex);
 	da_free(graphics->matrix_stack);
 	da_free(graphics->viewport_stack);
@@ -248,6 +253,8 @@ void gs_destroy(graphics_t *graphics)
 
 void gs_enter_context(graphics_t *graphics)
 {
+	PROFILE_STARTL_HERE("gs_context_active");
+
 	if (!ptr_valid(graphics, "gs_enter_context"))
 		return;
 
@@ -258,7 +265,9 @@ void gs_enter_context(graphics_t *graphics)
 	}
 
 	if (!is_current) {
+		TracyCLockBeforeLock(graphics->tracy_mutex);
 		pthread_mutex_lock(&graphics->mutex);
+		TracyCLockAfterLock(graphics->tracy_mutex);
 		graphics->exports.device_enter_context(graphics->device);
 		thread_graphics = graphics;
 	}
@@ -275,8 +284,10 @@ void gs_leave_context(void)
 			graphics->exports.device_leave_context(graphics->device);
 			pthread_mutex_unlock(&graphics->mutex);
 			thread_graphics = NULL;
+			TracyCLockAfterUnlock(graphics->tracy_mutex);
 		}
 	}
+	profile_endL();
 }
 
 graphics_t *gs_get_context(void)
@@ -1113,6 +1124,8 @@ void gs_texture_set_image(gs_texture_t *tex, const uint8_t *data, uint32_t lines
 	size_t row_copy;
 	size_t height;
 
+	PROFILE_START_AUTO("gs_texture_set_image");
+
 	if (!gs_valid_p2("gs_texture_set_image", tex, data))
 		return;
 
@@ -1313,6 +1326,8 @@ gs_texture_t *gs_texture_create(uint32_t width, uint32_t height, enum gs_color_f
 	if (!gs_valid("gs_texture_create"))
 		return NULL;
 
+	PROFILE_START_AUTO("gs_texture_create");
+
 	if (uses_mipmaps && !pow2tex) {
 		blog(LOG_WARNING, "Cannot use mipmaps with a "
 				  "non-power-of-two texture.  Disabling "
@@ -1340,6 +1355,7 @@ gs_texture_t *gs_texture_create_from_dmabuf(unsigned int width, unsigned int hei
 					    enum gs_color_format color_format, uint32_t n_planes, const int *fds,
 					    const uint32_t *strides, const uint32_t *offsets, const uint64_t *modifiers)
 {
+	PROFILE_START_AUTO("gs_texture_create_from_dmabuf");
 	graphics_t *graphics = thread_graphics;
 
 	return graphics->exports.device_texture_create_from_dmabuf(
@@ -1365,6 +1381,7 @@ bool gs_query_dmabuf_modifiers_for_format(uint32_t drm_format, uint64_t **modifi
 gs_texture_t *gs_texture_create_from_pixmap(uint32_t width, uint32_t height, enum gs_color_format color_format,
 					    uint32_t target, void *pixmap)
 {
+	PROFILE_START_AUTO("gs_texture_create_from_pixmap");
 	graphics_t *graphics = thread_graphics;
 
 	return graphics->exports.device_texture_create_from_pixmap(graphics->device, width, height, color_format,
@@ -1806,6 +1823,7 @@ void gs_copy_texture(gs_texture_t *dst, gs_texture_t *src)
 	if (!gs_valid_p2("gs_copy_texture", dst, src))
 		return;
 
+	PROFILE_START_AUTO("gs_copy_texture");
 	graphics->exports.device_copy_texture(graphics->device, dst, src);
 }
 
@@ -1878,6 +1896,7 @@ void gs_load_swapchain(gs_swapchain_t *swapchain)
 	if (!gs_valid("gs_load_swapchain"))
 		return;
 
+	PROFILE_START_AUTO("gs_load_swapchain");
 	graphics->exports.device_load_swapchain(graphics->device, swapchain);
 }
 
@@ -1904,6 +1923,7 @@ bool gs_is_present_ready(void)
 void gs_present(void)
 {
 	graphics_t *graphics = thread_graphics;
+	PROFILE_START_AUTO("gs_present");
 
 	if (!gs_valid("gs_present"))
 		return;
@@ -1911,9 +1931,19 @@ void gs_present(void)
 	graphics->exports.device_present(graphics->device);
 }
 
+bool gs_is_present_async_ready(graphics_t *g) {
+	PROFILE_START_AUTO("wait_present_async_ready");
+	return g->exports.device_is_present_async_ready(g->device);
+}
+
+void gs_present_async(graphics_t *g, gs_swapchain_t *swapchain) {
+	g->exports.device_present_async(g->device, swapchain);
+}
+
 void gs_flush(void)
 {
 	graphics_t *graphics = thread_graphics;
+	PROFILE_START_AUTO("gs_flush");
 
 	if (!gs_valid("gs_flush"))
 		return;
@@ -2550,6 +2580,7 @@ enum gs_color_format gs_stagesurface_get_color_format(const gs_stagesurf_t *stag
 
 bool gs_stagesurface_map(gs_stagesurf_t *stagesurf, uint8_t **data, uint32_t *linesize)
 {
+	PROFILE_START_AUTO("gs_stagesurf_map");
 	graphics_t *graphics = thread_graphics;
 
 	if (!gs_valid_p3("gs_stagesurface_map", stagesurf, data, linesize))
@@ -2560,6 +2591,7 @@ bool gs_stagesurface_map(gs_stagesurf_t *stagesurf, uint8_t **data, uint32_t *li
 
 void gs_stagesurface_unmap(gs_stagesurf_t *stagesurf)
 {
+	PROFILE_START_AUTO("gs_stagesurf_unmap");
 	graphics_t *graphics = thread_graphics;
 
 	if (!gs_valid_p("gs_stagesurface_unmap", stagesurf))

@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+#include <unistd.h>
+
 #include <inttypes.h>
 #include "profiler.h"
 
@@ -9,6 +12,8 @@
 #include <math.h>
 
 #include <zlib.h>
+
+#include <tracy/TracyC.h>
 
 //#define TRACK_OVERHEAD
 
@@ -43,6 +48,8 @@ struct profile_call {
 #ifdef TRACK_OVERHEAD
 	uint64_t overhead_end;
 #endif
+	TracyCZoneCtx zctx;
+	pid_t tid;
 	uint64_t expected_time_between_calls;
 	DARRAY(profile_call) children;
 	profile_call *parent;
@@ -252,6 +259,8 @@ static bool enabled = false;
 static pthread_mutex_t root_mutex = PTHREAD_MUTEX_INITIALIZER;
 static DARRAY(profile_root_entry) root_entries;
 
+// Leaks perthread ata.
+static THREAD_LOCAL DARRAY(TracyCZoneCtx) thread_zctxs = {0};
 static THREAD_LOCAL profile_call *thread_context = NULL;
 static THREAD_LOCAL bool thread_enabled = true;
 
@@ -259,6 +268,7 @@ void profiler_start(void)
 {
 	pthread_mutex_lock(&root_mutex);
 	enabled = true;
+	___tracy_startup_profiler();
 	pthread_mutex_unlock(&root_mutex);
 }
 
@@ -266,6 +276,7 @@ void profiler_stop(void)
 {
 	pthread_mutex_lock(&root_mutex);
 	enabled = false;
+	___tracy_shutdown_profiler();
 	pthread_mutex_unlock(&root_mutex);
 }
 
@@ -355,6 +366,38 @@ static void merge_context(profile_call *context)
 	free_call_context(prev_call);
 }
 
+void profile_startL(const char *name,
+		    const struct profile_source_location_data *data)
+{
+	if (!thread_enabled)
+		return;
+
+	TracyCZoneCtx *zctx_new = da_push_back_new(thread_zctxs);
+	if (!data) {
+		uint64_t srcloc = ___tracy_alloc_srcloc_name(
+			0, "unknown", 7, "unknown", 7, name, strlen(name), 0);
+		*zctx_new =
+			___tracy_emit_zone_begin_alloc(srcloc, thread_enabled);
+		return;
+	}
+
+	*zctx_new = ___tracy_emit_zone_begin(
+		(const struct ___tracy_source_location_data *)data,
+		thread_enabled);
+	if (name && name != data->name)
+		TracyCZoneName(*zctx_new, name, strlen(name));
+}
+
+void profile_endL()
+{
+	if (!thread_enabled)
+		return;
+
+	TracyCZoneCtx *zctx = da_end(thread_zctxs);
+	TracyCZoneEnd(*zctx);
+	da_pop_back(thread_zctxs);
+}
+
 void profile_start(const char *name)
 {
 	if (!thread_enabled)
@@ -367,6 +410,15 @@ void profile_start(const char *name)
 #endif
 		.parent = thread_context,
 	};
+	/*
+	uint64_t srcloc = ___tracy_alloc_srcloc_name(0, "unknown", 7, "unknown",
+						     7, name, strlen(name), 0);
+	TracyCZoneCtx zctx =
+		___tracy_emit_zone_begin_alloc(srcloc, thread_enabled);
+	new_call.zctx = zctx;
+	*/
+	profile_startL(name, NULL);
+	new_call.tid = gettid();
 
 	profile_call *call = NULL;
 
@@ -380,6 +432,17 @@ void profile_start(const char *name)
 
 	thread_context = call;
 	call->start_time = os_gettime_ns();
+}
+void profile_annotate_text(const char *value)
+{
+	TracyCZoneCtx *zctx = da_end(thread_zctxs);
+	TracyCZoneText(*zctx, value, strlen(value));
+}
+
+void profile_annotate_name(const char *value)
+{
+	TracyCZoneCtx *zctx = da_end(thread_zctxs);
+	TracyCZoneName(*zctx, value, strlen(value));
 }
 
 void profile_end(const char *name)
@@ -396,6 +459,11 @@ void profile_end(const char *name)
 
 	if (!call->name)
 		call->name = name;
+
+	if (call->tid != gettid()) {
+		blog(LOG_ERROR,
+		     "We transitioned across threads. prepare for sadness");
+	}
 
 	if (call->name != name) {
 		blog(LOG_ERROR,
@@ -418,6 +486,7 @@ void profile_end(const char *name)
 
 	thread_context = call->parent;
 
+	profile_endL();
 	call->end_time = end;
 #ifdef TRACK_OVERHEAD
 	call->overhead_end = os_gettime_ns();
@@ -1114,4 +1183,83 @@ uint64_t profiler_snapshot_entry_max_time_between_calls(profiler_snapshot_entry_
 uint64_t profiler_snapshot_entry_overall_between_calls_count(profiler_snapshot_entry_t *entry)
 {
 	return entry ? entry->overall_between_calls_count : 0;
+}
+
+void profiler_frame_mark_auto(const char *name)
+{
+	if (name) {
+		TracyCFrameMarkNamed(name);
+	} else {
+		TracyCFrameMark;
+	}
+}
+void profiler_frame_mark_start(const char *name)
+{
+	TracyCFrameMarkStart(name);
+}
+void profiler_frame_mark_end(const char *name)
+{
+	TracyCFrameMarkEnd(name);
+}
+
+static const char *unknown_str = "unknown";
+void profiler_gpu_zone_start(const char *name, uint16_t tid)
+{
+	if (!thread_enabled)
+		return;
+
+	uint64_t srcloc = ___tracy_alloc_srcloc_name(
+		0, unknown_str, 7, unknown_str, 7, name, strlen(name), 0);
+	struct ___tracy_gpu_zone_begin_data gpuz_data = {
+		srcloc,
+		tid,
+		1,
+	};
+	___tracy_emit_gpu_zone_begin_alloc_serial(gpuz_data);
+}
+
+void profiler_gpu_zone_end(uint16_t tid)
+{
+	if (!thread_enabled)
+		return;
+
+	struct ___tracy_gpu_zone_end_data gpuz_data = {
+		tid,
+		1,
+	};
+	___tracy_emit_gpu_zone_end_serial(gpuz_data);
+}
+
+void profiler_gpu_time_report(uint16_t tid, uint64_t time)
+{
+	if (!thread_enabled)
+		return;
+
+	struct ___tracy_gpu_time_data gpuz_data = {
+		(int64_t)time,
+		tid,
+		1,
+	};
+	___tracy_emit_gpu_time_serial(gpuz_data);
+}
+
+void profiler_gpu_ctx_new(int64_t gpu_time)
+{
+	// Copied from Tracy
+	enum GpuContextType : uint8_t {
+		Tracy_Invalid,
+		Tracy_OpenGl,
+		Tracy_Vulkan,
+		Tracy_OpenCL,
+		Tracy_Direct3D12,
+		Tracy_Direct3D11
+	};
+	const struct ___tracy_gpu_new_context_data ctx_data = {
+		gpu_time,
+		1.f,
+		1, //context
+		0, //flags
+		Tracy_Vulkan,
+	};
+	___tracy_emit_gpu_new_context_serial(ctx_data);
 }

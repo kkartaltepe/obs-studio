@@ -687,6 +687,8 @@ EXPORT void gs_clear(uint32_t clear_flags, const struct vec4 *color, float depth
 EXPORT bool gs_is_present_ready(void);
 EXPORT void gs_present(void);
 EXPORT void gs_flush(void);
+EXPORT bool gs_is_present_async_ready(graphics_t *g);
+EXPORT void gs_present_async(graphics_t *g, gs_swapchain_t *swapchain);
 
 EXPORT void gs_set_cull_mode(enum gs_cull_mode mode);
 EXPORT enum gs_cull_mode gs_get_cull_mode(void);
@@ -787,7 +789,7 @@ EXPORT bool gs_texture_create_p010(gs_texture_t **tex_y, gs_texture_t **tex_uv, 
 
 EXPORT bool gs_is_monitor_hdr(void *monitor);
 
-#define GS_USE_DEBUG_MARKERS 0
+#define GS_USE_DEBUG_MARKERS 1
 #if GS_USE_DEBUG_MARKERS
 static const float GS_DEBUG_COLOR_DEFAULT[] = {0.5f, 0.5f, 0.5f, 1.0f};
 static const float GS_DEBUG_COLOR_RENDER_VIDEO[] = {0.0f, 0.5f, 0.0f, 1.0f};

@@ -21,6 +21,63 @@ EXPORT void profile_end(const char *name);
 
 EXPORT void profile_reenable_thread(void);
 
+struct profile_source_location_data {
+	const char *name;
+	const char *function;
+	const char *file;
+	uint32_t line;
+	uint32_t _color; //unused
+};
+
+// Make sure preprocessor things like __LINE__, etc. resolve
+#ifndef OBS_PROFILE_CONCAT_I
+#define OBS_PROFILE_CONCAT_I(x, y) x##y
+#endif
+#ifndef OBS_PROFILE_CONCAT
+#define OBS_PROFILE_CONCAT(x, y) OBS_PROFILE_CONCAT_I(x, y)
+#endif
+
+#define PROFILE_LOCATION_NAME \
+	OBS_PROFILE_CONCAT(__profile_source_location, __LINE__)
+
+#define PROFILE_LOCATION(name)                                     \
+	static const struct profile_source_location_data           \
+		PROFILE_LOCATION_NAME = {name, __func__, __FILE__, \
+					 (uint32_t)__LINE__, 0}
+#define PROFILE_STARTL_HERE(name) \
+	PROFILE_LOCATION(name);   \
+	profile_startL(NULL, &PROFILE_LOCATION_NAME)
+
+#define PROFILE_START_AUTO(str)                                               \
+	PROFILE_LOCATION(str);                                                \
+	__attribute__((cleanup(profile_end_auto)))                            \
+	const char *OBS_PROFILE_CONCAT(profile_zone_release, __LINE__) = str; \
+	profile_startL(NULL, &PROFILE_LOCATION_NAME)
+
+EXPORT void profile_startL(const char *name,
+			   const struct profile_source_location_data *data);
+EXPORT void profile_endL();
+EXPORT void profile_annotate_text(const char *value);
+EXPORT void profile_annotate_name(const char *value);
+
+static inline void profile_end_auto(const char **unused)
+{
+	UNUSED_PARAMETER(unused);
+	profile_endL();
+}
+
+/* ------------------------------------------------------------------------- */
+/* Frame profiling */
+
+EXPORT void profiler_frame_mark_auto(const char *name);
+EXPORT void profiler_frame_mark_start(const char *name);
+EXPORT void profiler_frame_mark_end(const char *name);
+
+EXPORT void profiler_gpu_zone_start(const char *name, uint16_t tid);
+EXPORT void profiler_gpu_zone_end(uint16_t tid);
+EXPORT void profiler_gpu_time_report(uint16_t tid, uint64_t time);
+EXPORT void profiler_gpu_ctx_new(int64_t gpu_time);
+
 /* ------------------------------------------------------------------------- */
 /* Profiler control */
 
