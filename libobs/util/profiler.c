@@ -1215,7 +1215,7 @@ void profiler_gpu_zone_start(const char *name, uint16_t tid)
 		tid,
 		1,
 	};
-	___tracy_emit_gpu_zone_begin_alloc_serial(gpuz_data);
+	___tracy_emit_gpu_zone_begin_alloc(gpuz_data);
 }
 
 void profiler_gpu_zone_end(uint16_t tid)
@@ -1227,7 +1227,7 @@ void profiler_gpu_zone_end(uint16_t tid)
 		tid,
 		1,
 	};
-	___tracy_emit_gpu_zone_end_serial(gpuz_data);
+	___tracy_emit_gpu_zone_end(gpuz_data);
 }
 
 void profiler_gpu_time_report(uint16_t tid, uint64_t time)
@@ -1240,7 +1240,7 @@ void profiler_gpu_time_report(uint16_t tid, uint64_t time)
 		tid,
 		1,
 	};
-	___tracy_emit_gpu_time_serial(gpuz_data);
+	___tracy_emit_gpu_time(gpuz_data);
 }
 
 void profiler_gpu_ctx_new(int64_t gpu_time)
@@ -1261,5 +1261,5 @@ void profiler_gpu_ctx_new(int64_t gpu_time)
 		0, //flags
 		Tracy_Vulkan,
 	};
-	___tracy_emit_gpu_new_context_serial(ctx_data);
+	___tracy_emit_gpu_new_context(ctx_data);
 }

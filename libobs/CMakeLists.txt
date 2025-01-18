@@ -263,6 +263,7 @@ target_link_libraries(
     jansson::jansson
     Uthash::Uthash
     ZLIB::ZLIB
+    Tracy::TracyClient
   PUBLIC Threads::Threads
 )
 

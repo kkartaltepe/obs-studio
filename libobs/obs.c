@@ -806,8 +806,8 @@ static void obs_free_video(void)
 		blog(LOG_WARNING, "Number of remaining views: %ld", num_views);
 	pthread_rwlock_unlock(&obs->video.mixes_rwlock);
 
-	pthread_mutex_destroy(&obs->video.mixes_mutex);
-	pthread_mutex_init_value(&obs->video.mixes_mutex);
+	pthread_rwlock_destroy(&obs->video.mixes_rwlock);
+        pthread_rwlock_init_value(&obs->video.mixes_rwlock);
 
 	for (size_t i = 0; i < obs->video.ready_encoder_groups.num; i++) {
 		obs_weak_encoder_release(obs->video.ready_encoder_groups.array[i]);
