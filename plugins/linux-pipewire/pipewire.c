@@ -736,6 +736,7 @@ static void process_video_sync(obs_pipewire_stream *obs_pw_stream)
 		goto read_metadata;
 
 	if (buffer->datas[0].type == SPA_DATA_DmaBuf) {
+		PROFILE_START_AUTO("dmabuf_handling");
 		uint32_t planes = get_spa_buffer_plane_count(buffer);
 		uint32_t *offsets = alloca(sizeof(uint32_t) * planes);
 		uint32_t *strides = alloca(sizeof(uint32_t) * planes);
@@ -787,6 +788,7 @@ static void process_video_sync(obs_pipewire_stream *obs_pw_stream)
 #else
 		obs_pw_stream->sync.set = false;
 #endif
+		blog(LOG_INFO, "Explicit Sync set: %b", obs_pw_stream->sync.set);
 
 		if (corrupt) {
 			blog(LOG_DEBUG, "[pipewire] buffer contains corrupted data");
@@ -809,6 +811,7 @@ static void process_video_sync(obs_pipewire_stream *obs_pw_stream)
 			goto read_metadata;
 		}
 	} else {
+		PROFILE_START_AUTO("shm_handling");
 		blog(LOG_DEBUG, "[pipewire] Buffer has memory texture");
 
 		if (!obs_pw_video_format_from_spa_format(obs_pw_stream->format.info.raw.format, &obs_pw_video_format) ||
@@ -868,6 +871,7 @@ read_metadata:
 	cursor = spa_buffer_find_meta_data(buffer, SPA_META_Cursor, sizeof(*cursor));
 	obs_pw_stream->cursor.valid = cursor && spa_meta_cursor_is_valid(cursor);
 	if (obs_pw_stream->cursor.visible && obs_pw_stream->cursor.valid) {
+		PROFILE_START_AUTO("cursor_handling");
 		struct spa_meta_bitmap *bitmap = NULL;
 
 		if (cursor->bitmap_offset)
@@ -1310,6 +1314,7 @@ void obs_pipewire_stream_video_render(obs_pipewire_stream *obs_pw_stream, gs_eff
 		return;
 
 	if (obs_pw_stream->sync.set) {
+		PROFILE_START_AUTO("pipwire_wait_acquire");
 		gs_sync_t *acquire_sync = gs_sync_create_from_syncobj_timeline_point(
 			obs_pw_stream->sync.acquire_syncobj_fd, obs_pw_stream->sync.acquire_point);
 		gs_sync_wait(acquire_sync);
@@ -1360,6 +1365,7 @@ void obs_pipewire_stream_video_render(obs_pipewire_stream *obs_pw_stream, gs_eff
 	gs_blend_state_pop();
 
 	if (obs_pw_stream->sync.set) {
+		PROFILE_START_AUTO("pipwire_make_release");
 		gs_sync_t *release_sync = gs_sync_create();
 		gs_sync_export_syncobj_timeline_point(release_sync, obs_pw_stream->sync.release_syncobj_fd,
 						      obs_pw_stream->sync.release_point);
