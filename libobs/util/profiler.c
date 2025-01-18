@@ -268,7 +268,9 @@ void profiler_start(void)
 {
 	pthread_mutex_lock(&root_mutex);
 	enabled = true;
+#if TRACY_MANUAL_LIFETIME
 	___tracy_startup_profiler();
+#endif
 	pthread_mutex_unlock(&root_mutex);
 }
 
@@ -276,7 +278,9 @@ void profiler_stop(void)
 {
 	pthread_mutex_lock(&root_mutex);
 	enabled = false;
+#if TRACY_MANUAL_LIFETIME
 	___tracy_shutdown_profiler();
+#endif
 	pthread_mutex_unlock(&root_mutex);
 }
 
@@ -1232,7 +1236,7 @@ void profiler_gpu_zone_end(uint16_t tid)
 
 void profiler_gpu_time_report(uint16_t tid, uint64_t time)
 {
-	if (!thread_enabled)
+	if (!thread_enabled && TracyCIsConnected)
 		return;
 
 	struct ___tracy_gpu_time_data gpuz_data = {
@@ -1241,6 +1245,18 @@ void profiler_gpu_time_report(uint16_t tid, uint64_t time)
 		1,
 	};
 	___tracy_emit_gpu_time(gpuz_data);
+}
+
+void profiler_gpu_time_sync(uint64_t time)
+{
+	if (!thread_enabled && TracyCIsConnected)
+		return;
+
+	struct ___tracy_gpu_time_sync_data gpuz_data = {
+		(int64_t)time,
+		1,
+	};
+	___tracy_emit_gpu_time_sync(gpuz_data);
 }
 
 void profiler_gpu_ctx_new(int64_t gpu_time)

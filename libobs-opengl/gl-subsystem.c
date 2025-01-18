@@ -987,6 +987,11 @@ void device_begin_frame(gs_device_t *device)
 	UNUSED_PARAMETER(device);
 
 	PROFILE_START_AUTO("begin_frame_gather_counters");
+	//TODO: Not every frame supposedly :)
+	int64_t tgpu;
+	glGetInteger64v(GL_TIMESTAMP, &tgpu);
+	profiler_gpu_time_sync(tgpu);
+
 	// Collect perf timestamps.
 	while (device->t.qtail != device->t.qhead) {
 		GLint available;
