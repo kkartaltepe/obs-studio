@@ -1247,6 +1247,18 @@ void profiler_gpu_time_report(uint16_t tid, uint64_t time)
 	___tracy_emit_gpu_time(gpuz_data);
 }
 
+void profiler_gpu_time_sync(uint64_t time)
+{
+	if (!thread_enabled)
+		return;
+
+	struct ___tracy_gpu_time_sync_data gpuz_data = {
+		(int64_t)time,
+		1,
+	};
+	___tracy_emit_gpu_time_sync(gpuz_data);
+}
+
 void profiler_gpu_ctx_new(int64_t gpu_time)
 {
 	// Copied from Tracy

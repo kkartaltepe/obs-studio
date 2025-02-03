@@ -76,6 +76,7 @@ EXPORT void profiler_frame_mark_end(const char *name);
 EXPORT void profiler_gpu_zone_start(const char *name, uint16_t tid);
 EXPORT void profiler_gpu_zone_end(uint16_t tid);
 EXPORT void profiler_gpu_time_report(uint16_t tid, uint64_t time);
+EXPORT void profiler_gpu_time_sync(uint64_t time);
 EXPORT void profiler_gpu_ctx_new(int64_t gpu_time);
 
 /* ------------------------------------------------------------------------- */
